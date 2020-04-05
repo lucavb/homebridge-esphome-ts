@@ -12,7 +12,7 @@ import {
 } from 'hap-nodejs/dist/lib/gen/HomeKit';
 import {tap} from 'rxjs/operators';
 import {BinarySensorComponent} from 'esphome-ts/dist';
-import {BinarySensorTypes} from "esphome-ts/dist/components/binarySensorTypes";
+import {BinarySensorTypes} from 'esphome-ts/dist/components/binarySensorTypes';
 
 type SupportedServices = typeof MotionSensor | typeof LeakSensor | typeof ContactSensor | typeof SmokeSensor;
 type SupportedCharacteristics =

@@ -8,7 +8,7 @@ import {
 import {filter, take, tap} from 'rxjs/operators';
 import * as uuidFunctions from 'hap-nodejs/dist/lib/util/uuid';
 import {componentHelpers} from './homebridgeAccessories/componentHelpers';
-import {EspDevice} from "esphome-ts/dist";
+import {EspDevice} from 'esphome-ts/dist';
 
 const PLUGIN_NAME = 'homebridge-esphome-ts';
 const PLATFORM_NAME = 'esphome-ts';
