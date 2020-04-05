@@ -1,0 +1,35 @@
+esphome:
+  name: test_esp
+  platform: ESP8266
+  board: nodemcuv2
+
+wifi:
+  ssid: ssid
+  password: 'your_password'
+
+web_server:
+
+api:
+
+logger:
+
+ota:
+
+light:
+  - platform: fastled_clockless
+    chipset: WS2812B
+    pin: D4
+    num_leds: 64
+    rgb_order: GRB
+    name: "Test LED"
+
+binary_sensor:
+  - platform: gpio
+    pin: D5
+    name: "Test PIR"
+    device_class: motion
+
+switch:
+  - platform: gpio
+    pin: D6
+    name: "Test Switch"
