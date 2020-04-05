@@ -1,23 +1,40 @@
 {
-  "name": "homebridge-esphome-ts",
-  "version": "1.0.0",
-  "description": "New plugin for integrating for esphome into homebridge",
-  "main": "dist/index.ts",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "keywords": [
-    "homebridge",
-    "esphome"
-  ],
-  "author": "Luca Becker",
-  "license": "GPL-3.0",
-  "devDependencies": {
-    "@typescript-eslint/eslint-plugin": "^2.26.0",
-    "@typescript-eslint/parser": "^2.26.0",
-    "eslint": "^6.8.0",
-    "eslint-config-google": "^0.14.0",
-    "homebridge-ts-helper": "^1.0.6",
-    "typescript": "^3.8.3"
-  }
+    "name": "homebridge-esphome-ts",
+    "version": "1.0.0",
+    "description": "New plugin for integrating for esphome into homebridge",
+    "main": "dist/index.js",
+    "scripts": {
+        "test": "echo \"Error: no test specified\" && exit 1"
+    },
+    "files": [
+        "/dist"
+    ],
+    "keywords": [
+        "homebridge",
+        "esphome",
+        "homebridge-plugin"
+    ],
+    "author": "Luca Becker",
+    "license": "GPL-3.0",
+    "engines": {
+        "node": ">=0.12.0",
+        "homebridge": ">=0.4.0"
+    },
+    "dependencies": {
+        "color-convert": "^2.0.1",
+        "hap-nodejs": "^0.5.9",
+        "protobufjs": "^6.8.9",
+        "rxjs": "^6.5.5",
+        "esphome-ts": "2.0.0-beta.2"
+    },
+    "devDependencies": {
+        "@types/color-convert": "^1.9.0",
+        "@types/node": "^13.11.0",
+        "@typescript-eslint/eslint-plugin": "^2.26.0",
+        "@typescript-eslint/parser": "^2.26.0",
+        "eslint": "^6.8.0",
+        "eslint-config-google": "^0.14.0",
+        "homebridge-ts-helper": "^2.0.0-beta.2",
+        "typescript": "^3.8.3"
+    }
 }
