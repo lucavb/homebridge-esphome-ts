@@ -11,7 +11,7 @@ import {componentHelpers} from './homebridgeAccessories/componentHelpers';
 import {EspDevice} from 'esphome-ts/dist';
 
 const PLUGIN_NAME = 'homebridge-esphome-ts';
-const PLATFORM_NAME = 'esphome-ts';
+const PLATFORM_NAME = 'esphome';
 
 let Accessory: HomebridgePlatformAccessory;
 let UUIDGen: typeof uuidFunctions;
