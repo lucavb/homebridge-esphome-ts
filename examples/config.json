@@ -1,0 +1,21 @@
+{
+    "bridge": {
+        "name": "Homebridge",
+        "username": "23:D3:F9:72:38:BE",
+        "manufacturer": "homebridge.io",
+        "model": "homebridge",
+        "port": 46382,
+        "pin": "111-11-111"
+    },
+    "description": "This is an example config with the esphome plugin",
+    "platforms": [
+        {
+            "platform": "esphome",
+            "devices": [
+                {
+                    "host": "my_esp.local"
+                }
+            ]
+        }
+    ]
+}
