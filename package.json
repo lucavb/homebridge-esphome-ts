@@ -10,6 +10,7 @@
         "cbuild": "npm run clean && npm run build"
     },
     "prepare": "npm run cbuild",
+    "repository": "https://github.com/lucavb/homebridge-esphome-ts",
     "files": [
         "/dist"
     ],
