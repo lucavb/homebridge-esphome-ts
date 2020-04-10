@@ -1,15 +1,15 @@
 {
     "name": "homebridge-esphome-ts",
-    "version": "1.0.0-beta.2",
+    "version": "1.0.0-beta.3",
     "description": "New plugin for integrating for esphome into homebridge",
     "main": "dist/index.js",
     "scripts": {
+        "prepare": "npm run cbuild",
         "build": "tsc",
         "test": "jest",
         "clean": "rm -rf dist",
         "cbuild": "npm run clean && npm run build"
     },
-    "prepare": "npm run cbuild",
     "repository": "https://github.com/lucavb/homebridge-esphome-ts",
     "files": [
         "/dist"
