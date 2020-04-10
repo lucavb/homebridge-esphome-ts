@@ -29,9 +29,14 @@ my two :)
 }
 ```
 
+## Blacklisting
+
+If for some reason you want to exclude a specific component from this plugin just
+add a key to a string array under the key `blacklist`.
+
 ## Todo
 
-- [ ] Implement a blacklist for components
+- [x] Implement a blacklist for components
 - [ ] Testing, especially the hap-nodejs >= 0.5 requirement
 - [x] Implement sensor component
 

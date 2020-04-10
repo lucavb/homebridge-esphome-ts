@@ -36,17 +36,21 @@ interface IEsphomePlatformConfig extends IPlatformConfig {
         host: string;
         password?: string;
         port?: number;
-    }[]
+    }[],
+    blacklist?: string[];
 }
 
 export class EsphomePlatform extends HomebridgePlatform {
 
     protected readonly espDevices: EspDevice[] = [];
 
+    protected readonly blacklistSet: Set<string>;
+
     constructor(protected readonly log: HomebridgeLogging,
                 protected readonly config: IEsphomePlatformConfig,
                 protected readonly api: HomebridgeApi) {
         super(log, config, api);
+        this.blacklistSet = new Set<string>(this.config.blacklist ?? []);
     }
 
     protected onHomebridgeDidFinishLaunching(): void {
@@ -80,7 +84,7 @@ export class EsphomePlatform extends HomebridgePlatform {
             }
             componentHelper(component, accessory);
             accessory.reachable = true;
-            if (accessory && newAccessory) {
+            if (accessory && newAccessory && !this.blacklistSet.has(component.name)) {
                 this.accessories.push(accessory);
                 this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
             }
