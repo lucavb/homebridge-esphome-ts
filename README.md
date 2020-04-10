@@ -8,8 +8,8 @@ Supported components include:
 
 * Lights
 * Switches
-* BinarySensors
-* Sensors (coming soon)
+* BinarySensors (motion, window, door, smoke and moisture(leak))
+* Sensors (temperature & humidity at the moment)
 
 This project is currently still in beta, but I thought that many eyes see more than just
 my two :)
@@ -31,9 +31,9 @@ my two :)
 
 ## Todo
 
-* Implement a blacklist for components
-* Testing, especially the hap-nodejs >= 0.5 requirement
-* Implement sensor component
+- [ ] Implement a blacklist for components
+- [ ] Testing, especially the hap-nodejs >= 0.5 requirement
+- [x] Implement sensor component
 
 ## Troubleshooting
 
