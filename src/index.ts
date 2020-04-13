@@ -17,7 +17,6 @@ let Accessory: HomebridgePlatformAccessory;
 let UUIDGen: typeof uuidFunctions;
 
 export default (homebridge: HomebridgeApi) => {
-    console.log('homebridge API version: ' + homebridge.version);
 
     // Accessory must be created from PlatformAccessory Constructor
     Accessory = homebridge.platformAccessory;
@@ -50,6 +49,7 @@ export class EsphomePlatform extends HomebridgePlatform {
                 protected readonly config: IEsphomePlatformConfig,
                 protected readonly api: HomebridgeApi) {
         super(log, config, api);
+        this.log('starting esphome');
         this.blacklistSet = new Set<string>(this.config.blacklist ?? []);
     }
 
@@ -72,6 +72,7 @@ export class EsphomePlatform extends HomebridgePlatform {
             const component = device.components[key];
             const componentHelper = componentHelpers.get(component.getType);
             if (!componentHelper) {
+                this.log(`${component.name} is currently not supported. You might want to file an issue on Github.`)
                 continue;
             }
             const uuid = UUIDGen.generate(component.name);
@@ -84,6 +85,7 @@ export class EsphomePlatform extends HomebridgePlatform {
             }
             componentHelper(component, accessory);
             accessory.reachable = true;
+            this.log(`${component.name} discovered and setup.`)
             if (accessory && newAccessory && !this.blacklistSet.has(component.name)) {
                 this.accessories.push(accessory);
                 this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);

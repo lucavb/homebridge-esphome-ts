@@ -29,8 +29,6 @@ export const lightHelper: ComponentHelper = (component: LightComponent, accessor
             } else if (component.supportsBrightness) {
                 lightBulbService.getCharacteristic(Characteristic.Brightness)?.updateValue((state.brightness ?? 0) * 100);
             }
-            lightBulbService.getCharacteristic(Characteristic.On)?.updateValue(!!state.state);
-
         }),
     ).subscribe();
 
