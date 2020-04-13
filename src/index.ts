@@ -17,7 +17,6 @@ let Accessory: HomebridgePlatformAccessory;
 let UUIDGen: typeof uuidFunctions;
 
 export default (homebridge: HomebridgeApi) => {
-    console.log('homebridge API version: ' + homebridge.version);
 
     // Accessory must be created from PlatformAccessory Constructor
     Accessory = homebridge.platformAccessory;
