@@ -17,7 +17,9 @@ export const switchHelper = (component: SwitchComponent, accessory: HomebridgePl
 
     service.getCharacteristic(Characteristic.On)?.on(CharacteristicEventTypes.SET,
         (value: CharacteristicValue, callback: CharacteristicSetCallback) => {
-            !!value ? component.turnOn() : component.turnOff();
+            if (component.status !== !!value) {
+                !!value ? component.turnOn() : component.turnOff();
+            }
             callback();
         });
 
