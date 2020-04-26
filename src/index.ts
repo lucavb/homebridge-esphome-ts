@@ -37,6 +37,7 @@ interface IEsphomePlatformConfig extends IPlatformConfig {
         port?: number;
     }[],
     blacklist?: string[];
+    debug?: boolean;
 }
 
 export class EsphomePlatform extends HomebridgePlatform {
@@ -50,6 +51,10 @@ export class EsphomePlatform extends HomebridgePlatform {
                 protected readonly api: HomebridgeApi) {
         super(log, config, api);
         this.log('starting esphome');
+        if (!Array.isArray(this.config.devices)) {
+            this.log.error('You did not specify a devices array! Esphome will not provide any accessories');
+            this.config.devices = [];
+        }
         this.blacklistSet = new Set<string>(this.config.blacklist ?? []);
     }
 
@@ -85,11 +90,16 @@ export class EsphomePlatform extends HomebridgePlatform {
             }
             componentHelper(component, accessory);
             accessory.reachable = true;
-            this.log(`${component.name} discovered and setup.`)
+            this.log(`${component.name} discovered and setup.`);
             if (accessory && newAccessory && !this.blacklistSet.has(component.name)) {
                 this.accessories.push(accessory);
                 this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
             }
+        }
+        if (this.config.debug) {
+            this.log(device.components);
+        } else {
+            this.log.debug(device.components);
         }
     }
 
