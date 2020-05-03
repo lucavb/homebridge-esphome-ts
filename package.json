@@ -1,6 +1,6 @@
 {
     "name": "homebridge-esphome-ts",
-    "version": "1.0.0-beta.7",
+    "version": "1.0.0-beta.8",
     "description": "New plugin for integrating for esphome into homebridge",
     "main": "dist/index.js",
     "scripts": {
@@ -12,7 +12,8 @@
     },
     "repository": "https://github.com/lucavb/homebridge-esphome-ts",
     "files": [
-        "/dist"
+        "/dist",
+        "config.schema.json"
     ],
     "keywords": [
         "homebridge",
