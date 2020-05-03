@@ -1,0 +1,57 @@
+{
+    "pluginAlias": "esphome-ts",
+    "pluginType": "platform",
+    "singular": true,
+    "schema": {
+        "type": "object",
+        "properties": {
+            "devices": {
+                "title": "Devices",
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "host": {
+                            "name": "Host",
+                            "type": "string"
+                        },
+                        "port": {
+                            "name": "Port",
+                            "type": "number",
+                            "required": false
+                        },
+                        "password": {
+                            "name": "Password",
+                            "type": "string",
+                            "required": false
+                        }
+                    }
+                }
+            },
+            "debug": {
+                "title": "Debug",
+                "type": "boolean",
+                "required": false
+            }
+        }
+    },
+    "form": [
+        {
+            "type": "section",
+            "expandable": true,
+            "expanded": true,
+            "title": "Devices",
+            "items": [
+                {
+                    "key": "devices",
+                    "items": [
+                        "devices[].host",
+                        "devices[].port",
+                        "devices[].password"
+                    ]
+                }
+            ]
+        },
+        "debug"
+    ]
+}
