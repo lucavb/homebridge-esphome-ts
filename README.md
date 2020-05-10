@@ -14,6 +14,15 @@ Supported components include:
 This project is currently still in beta, but I thought that many eyes see more than just
 my two :)
 
+## Installation
+
+Unless you haven't done so already, make sure to install homebridge first. See instructions [here](https://github.com/homebridge/homebridge/wiki). Once you have done this, you can install this plugin by typing 
+```
+npm i -g homebridge-esphome-ts
+```
+
+Once this is done, you can configure your homebridge config.json according to the next section.
+
 ## Getting Started
 
 ```json
@@ -32,6 +41,10 @@ my two :)
 Only the `host` key is mandatory under devices. As password `''` is assumed aka no password and the default
 port number 6053 is also wired into the plugin. You can add, in theory, as many ESP devices as you want to
 that array.
+
+In case you don't have a working esphome configuration you can have look at the examples folder. There you will
+find both an example homebridge `config.json` file as well as an example esphome configuration. For further guidance
+on esphome please check out their website.
 
 ## Blacklisting
 
