@@ -86,6 +86,7 @@ export class EsphomePlatform extends HomebridgePlatform {
         for (const key of Object.keys(device.components)) {
             const component = device.components[key];
             if (this.blacklistSet.has(component.name)) {
+                this.logIfDebug(`not processing ${component.name} because it was blacklisted`);
                 continue;
             }
             const componentHelper = componentHelpers.get(component.getType);
@@ -98,6 +99,7 @@ export class EsphomePlatform extends HomebridgePlatform {
             let accessory: HomebridgePlatformAccessory | undefined = this.accessories.find(
                 (accessory) => accessory.UUID === uuid);
             if (!accessory) {
+                this.logIfDebug(`must be a new accessory`);
                 accessory = new Accessory(component.name, uuid);
                 newAccessory = true;
             }
@@ -110,22 +112,28 @@ export class EsphomePlatform extends HomebridgePlatform {
             this.log(`${component.name} discovered and setup.`);
             if (accessory && newAccessory) {
                 this.accessories.push(accessory);
+                this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
             }
         }
-        this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, this.accessories);
-        if (this.config.debug) {
-            this.log(device.components);
-        } else {
-            this.log.debug(device.components);
-        }
+        this.logIfDebug(device.components);
     }
 
     configureAccessory(accessory: HomebridgePlatformAccessory): void {
-        if (!this.blacklistSet.has(accessory.name)) {
+        if (!this.blacklistSet.has(accessory.displayName)) {
             accessory.reachable = false;
             this.accessories.push(accessory);
+            this.logIfDebug(`cached accessory ${accessory.displayName} was added`);
         } else {
             this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+            this.logIfDebug(`unregistered ${accessory.displayName} because it was blacklisted`);
+        }
+    }
+
+    private logIfDebug(msg?: any, parameters?: any[]): void {
+        if (this.config.debug) {
+            this.log(msg, parameters);
+        } else {
+            this.log.debug(msg, parameters);
         }
     }
 }
