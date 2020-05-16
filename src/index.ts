@@ -85,9 +85,12 @@ export class EsphomePlatform extends HomebridgePlatform {
     private addAccessories(device: EspDevice): void {
         for (const key of Object.keys(device.components)) {
             const component = device.components[key];
+            if (this.blacklistSet.has(component.name)) {
+                continue;
+            }
             const componentHelper = componentHelpers.get(component.getType);
             if (!componentHelper) {
-                this.log(`${component.name} is currently not supported. You might want to file an issue on Github.`)
+                this.log(`${component.name} is currently not supported. You might want to file an issue on Github.`);
                 continue;
             }
             const uuid = UUIDGen.generate(component.name);
@@ -103,12 +106,13 @@ export class EsphomePlatform extends HomebridgePlatform {
             this.subscription.add(device.alive$.pipe(
                 tap((val) => accessory!.reachable = val),
             ).subscribe());
+
             this.log(`${component.name} discovered and setup.`);
-            if (accessory && newAccessory && !this.blacklistSet.has(component.name)) {
+            if (accessory && newAccessory) {
                 this.accessories.push(accessory);
-                this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
             }
         }
+        this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, this.accessories);
         if (this.config.debug) {
             this.log(device.components);
         } else {
@@ -117,7 +121,11 @@ export class EsphomePlatform extends HomebridgePlatform {
     }
 
     configureAccessory(accessory: HomebridgePlatformAccessory): void {
-        accessory.reachable = false;
-        this.accessories.push(accessory);
+        if (!this.blacklistSet.has(accessory.name)) {
+            accessory.reachable = false;
+            this.accessories.push(accessory);
+        } else {
+            this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+        }
     }
 }
