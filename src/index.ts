@@ -9,6 +9,7 @@ import {filter, take, tap} from 'rxjs/operators';
 import * as uuidFunctions from 'hap-nodejs/dist/lib/util/uuid';
 import {componentHelpers} from './homebridgeAccessories/componentHelpers';
 import {EspDevice} from 'esphome-ts/dist';
+import {fromEvent, Subscription} from 'rxjs';
 
 const PLUGIN_NAME = 'homebridge-esphome-ts';
 const PLATFORM_NAME = 'esphome';
@@ -46,16 +47,25 @@ export class EsphomePlatform extends HomebridgePlatform {
 
     protected readonly blacklistSet: Set<string>;
 
+    protected readonly subscription: Subscription;
+
     constructor(protected readonly log: HomebridgeLogging,
                 protected readonly config: IEsphomePlatformConfig,
                 protected readonly api: HomebridgeApi) {
         super(log, config, api);
+        this.subscription = new Subscription();
         this.log('starting esphome');
         if (!Array.isArray(this.config.devices)) {
             this.log.error('You did not specify a devices array! Esphome will not provide any accessories');
             this.config.devices = [];
         }
         this.blacklistSet = new Set<string>(this.config.blacklist ?? []);
+
+        fromEvent(this.api, 'shutdown').pipe(
+            take(1),
+            tap(() => this.espDevices.forEach((device: EspDevice) => device.terminate())),
+            tap(() => this.subscription.unsubscribe()),
+        ).subscribe();
     }
 
     protected onHomebridgeDidFinishLaunching(): void {
@@ -90,6 +100,9 @@ export class EsphomePlatform extends HomebridgePlatform {
             }
             componentHelper(component, accessory);
             accessory.reachable = true;
+            this.subscription.add(device.alive$.pipe(
+                tap((val) => accessory!.reachable = val),
+            ).subscribe());
             this.log(`${component.name} discovered and setup.`);
             if (accessory && newAccessory && !this.blacklistSet.has(component.name)) {
                 this.accessories.push(accessory);
