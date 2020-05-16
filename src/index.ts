@@ -103,7 +103,13 @@ export class EsphomePlatform extends HomebridgePlatform {
                 accessory = new Accessory(component.name, uuid);
                 newAccessory = true;
             }
-            componentHelper(component, accessory);
+            if (!componentHelper(component, accessory)) {
+                this.log(`${component.name} could not be mapped to HomeKit. Please file an issue on Github.`);
+                if (!newAccessory) {
+                    this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+                }
+                continue;
+            }
             accessory.reachable = true;
             this.subscription.add(device.alive$.pipe(
                 tap((val) => accessory!.reachable = val),

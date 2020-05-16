@@ -11,7 +11,7 @@ import {tap} from 'rxjs/operators';
 import {ComponentHelper} from './componentHelpers';
 import {LightComponent} from 'esphome-ts/dist';
 
-export const lightHelper: ComponentHelper = (component: LightComponent, accessory: HomebridgePlatformAccessory): void => {
+export const lightHelper: ComponentHelper = (component: LightComponent, accessory: HomebridgePlatformAccessory): boolean => {
 
     let lightBulbService: Service | undefined = accessory.services.find((service) => service.UUID === Lightbulb.UUID);
     if (!lightBulbService) {
@@ -71,4 +71,5 @@ export const lightHelper: ComponentHelper = (component: LightComponent, accessor
             callback();
         });
 
+    return true;
 };

@@ -49,7 +49,7 @@ const map = new Map<BinarySensorTypes, BinarySensorHomekit>([
     }],
 ]);
 
-export const binarySensorHelper = (component: BinarySensorComponent, accessory: HomebridgePlatformAccessory): void => {
+export const binarySensorHelper = (component: BinarySensorComponent, accessory: HomebridgePlatformAccessory): boolean => {
 
     const homekitStuff = map.get(component.deviceClass);
 
@@ -70,6 +70,7 @@ export const binarySensorHelper = (component: BinarySensorComponent, accessory: 
                 service?.getCharacteristic(homekitStuff.characteristic)?.setValue(component.status);
             }),
         ).subscribe();
+        return true;
     }
-
+    return false;
 };

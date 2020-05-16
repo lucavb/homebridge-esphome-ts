@@ -5,7 +5,7 @@ import {binarySensorHelper} from './binarySensor';
 import {sensorHelper} from './sensor';
 import {switchHelper} from './switch';
 
-export type ComponentHelper = (component: any, accessory: HomebridgePlatformAccessory) => void;
+export type ComponentHelper = (component: any, accessory: HomebridgePlatformAccessory) => boolean;
 
 export const componentHelpers = new Map<ComponentType, ComponentHelper>([
     ['light', lightHelper],

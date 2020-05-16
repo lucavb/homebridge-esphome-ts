@@ -11,12 +11,15 @@ import {tap} from 'rxjs/operators';
 
 const isTemperatureComponent = (unitOfMeasurement: unknown) => unitOfMeasurement === '°C' || unitOfMeasurement === '°F';
 
-export const sensorHelper = (component: SensorComponent, accessory: HomebridgePlatformAccessory): void => {
+export const sensorHelper = (component: SensorComponent, accessory: HomebridgePlatformAccessory): boolean => {
     if (isTemperatureComponent(component.unitOfMeasurement)) {
         defaultSetup(component, accessory, TemperatureSensor, Characteristic.CurrentTemperature);
+        return true;
     } else if (component.unitOfMeasurement === '%' && component.icon === 'mdi:water-percent') {
         defaultSetup(component, accessory, HumiditySensor, CurrentRelativeHumidity);
+        return true;
     }
+    return false;
 };
 
 const defaultSetup = (component: SensorComponent,

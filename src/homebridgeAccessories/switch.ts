@@ -4,7 +4,7 @@ import {Switch} from 'hap-nodejs/dist/lib/gen/HomeKit';
 import {Characteristic, CharacteristicEventTypes, CharacteristicSetCallback, CharacteristicValue} from 'hap-nodejs';
 import {tap} from 'rxjs/operators';
 
-export const switchHelper = (component: SwitchComponent, accessory: HomebridgePlatformAccessory): void => {
+export const switchHelper = (component: SwitchComponent, accessory: HomebridgePlatformAccessory): boolean => {
 
     let service = accessory.services.find((service) => service.UUID === Switch.UUID);
     if (!service) {
@@ -23,4 +23,5 @@ export const switchHelper = (component: SwitchComponent, accessory: HomebridgePl
             callback();
         });
 
+    return true;
 };
