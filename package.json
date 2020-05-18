@@ -6,8 +6,8 @@
     "scripts": {
         "format": "npx eslint --fix src/**/*.ts",
         "prepare": "npm run format && npm run cbuild",
-        "build": "tsc",
-        "test": "jest",
+        "build": "npx tsc",
+        "test": "npx jest",
         "clean": "rm -rf dist",
         "cbuild": "npm run clean && npm run build"
     },
@@ -30,8 +30,6 @@
     "dependencies": {
         "color-convert": "^2.0.1",
         "esphome-ts": "^2.1.4",
-        "hap-nodejs": "^0.5.11",
-        "homebridge-ts-helper": "^2.0.0-beta.2",
         "protobufjs": "^6.8.9",
         "rxjs": "^6.5.5"
     },
@@ -42,6 +40,8 @@
         "@typescript-eslint/parser": "^2.27.0",
         "eslint": "^6.8.0",
         "eslint-config-google": "^0.14.0",
-        "typescript": "^3.8.3"
+        "typescript": "^3.9.2",
+        "homebridge": "^1.1.0",
+        "hap-nodejs": "^0.7.3"
     }
 }

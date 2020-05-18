@@ -1,14 +1,14 @@
-import {HomebridgePlatformAccessory} from 'homebridge-ts-helper';
 import {SwitchComponent} from 'esphome-ts/dist';
-import {Switch} from 'hap-nodejs/dist/lib/gen/HomeKit';
-import {Characteristic, CharacteristicEventTypes, CharacteristicSetCallback, CharacteristicValue} from 'hap-nodejs';
+import {CharacteristicEventTypes, CharacteristicSetCallback, CharacteristicValue} from 'hap-nodejs';
 import {tap} from 'rxjs/operators';
+import {PlatformAccessory} from 'homebridge';
+import {Characteristic, Service} from '../index';
 
-export const switchHelper = (component: SwitchComponent, accessory: HomebridgePlatformAccessory): boolean => {
+export const switchHelper = (component: SwitchComponent, accessory: PlatformAccessory): boolean => {
 
-    let service = accessory.services.find((service) => service.UUID === Switch.UUID);
+    let service = accessory.services.find((service) => service.UUID === Service.Switch.UUID);
     if (!service) {
-        service = accessory.addService(new Switch(component.name, ''));
+        service = accessory.addService(new Service.Switch(component.name, ''));
     }
 
     component.state$.pipe(

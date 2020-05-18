@@ -1,33 +1,32 @@
-import {Lightbulb} from 'hap-nodejs/dist/lib/gen/HomeKit';
-import {
-    Characteristic,
-    CharacteristicEventTypes,
-    CharacteristicSetCallback,
-    CharacteristicValue,
-    Service,
-} from 'hap-nodejs';
-import {HomebridgePlatformAccessory} from 'homebridge-ts-helper';
 import {tap} from 'rxjs/operators';
 import {ComponentHelper} from './componentHelpers';
 import {LightComponent} from 'esphome-ts/dist';
+import {
+    CharacteristicEventTypes,
+    CharacteristicSetCallback,
+    CharacteristicValue,
+    PlatformAccessory,
+    Service as HAPService,
+} from 'homebridge';
+import {Characteristic, Service} from '../index';
 
-export const lightHelper: ComponentHelper = (component: LightComponent, accessory: HomebridgePlatformAccessory): boolean => {
+export const lightHelper: ComponentHelper = (component: LightComponent, accessory: PlatformAccessory): boolean => {
 
-    let lightBulbService: Service | undefined = accessory.services.find((service) => service.UUID === Lightbulb.UUID);
+    let lightBulbService: HAPService | undefined = accessory.services
+        .find((service: HAPService) => service.UUID === Service.Lightbulb.UUID);
     if (!lightBulbService) {
-        lightBulbService = accessory.addService(new Lightbulb(component.name, ''));
+        lightBulbService = accessory.addService(new Service.Lightbulb(component.name, ''));
     }
     component.state$.pipe(
         tap((state) => {
-            const lightBulbService = accessory.getService(component.name);
-            lightBulbService.getCharacteristic(Characteristic.On)?.updateValue(!!state.state);
+            lightBulbService!.getCharacteristic(Characteristic.On)?.updateValue(!!state.state);
             if (component.supportsRgb) {
                 const hsv = component.hsv;
-                lightBulbService.getCharacteristic(Characteristic.Hue)?.updateValue(hsv.hue);
-                lightBulbService.getCharacteristic(Characteristic.Saturation)?.updateValue(hsv.saturation);
-                lightBulbService.getCharacteristic(Characteristic.Brightness)?.updateValue(hsv.value);
+                lightBulbService!.getCharacteristic(Characteristic.Hue)?.updateValue(hsv.hue);
+                lightBulbService!.getCharacteristic(Characteristic.Saturation)?.updateValue(hsv.saturation);
+                lightBulbService!.getCharacteristic(Characteristic.Brightness)?.updateValue(hsv.value);
             } else if (component.supportsBrightness) {
-                lightBulbService.getCharacteristic(Characteristic.Brightness)?.updateValue((state.brightness ?? 0) * 100);
+                lightBulbService!.getCharacteristic(Characteristic.Brightness)?.updateValue((state.brightness ?? 0) * 100);
             }
         }),
     ).subscribe();
