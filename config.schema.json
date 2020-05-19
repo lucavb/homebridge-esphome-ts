@@ -1,5 +1,5 @@
 {
-    "pluginAlias": "esphome-ts",
+    "pluginAlias": "esphome",
     "pluginType": "platform",
     "singular": true,
     "schema": {
