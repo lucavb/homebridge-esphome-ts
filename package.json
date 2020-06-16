@@ -5,7 +5,7 @@
     "main": "dist/index.js",
     "scripts": {
         "format": "npx eslint --fix src/**/*.ts",
-        "prepare": "npm run format && npm run cbuild",
+        "prepack": "npm run format && npm run cbuild",
         "build": "npx tsc",
         "test": "npx jest",
         "clean": "rm -rf dist",
