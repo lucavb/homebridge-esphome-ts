@@ -82,10 +82,6 @@ export class EsphomePlatform implements DynamicPlatformPlugin {
                 }
                 continue;
             }
-            accessory.reachable = true;
-            this.subscription.add(device.alive$.pipe(
-                tap((val) => accessory!.reachable = val),
-            ).subscribe());
 
             this.log(`${component.name} discovered and setup.`);
             if (accessory && newAccessory) {
@@ -98,7 +94,6 @@ export class EsphomePlatform implements DynamicPlatformPlugin {
 
     configureAccessory(accessory: PlatformAccessory): void {
         if (!this.blacklistSet.has(accessory.displayName)) {
-            accessory.reachable = false;
             this.accessories.push(accessory);
             this.logIfDebug(`cached accessory ${accessory.displayName} was added`);
         } else {
