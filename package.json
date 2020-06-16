@@ -30,18 +30,18 @@
     "dependencies": {
         "color-convert": "^2.0.1",
         "esphome-ts": "^2.1.4",
-        "protobufjs": "^6.8.9",
+        "protobufjs": "^6.9.0",
         "rxjs": "^6.5.5"
     },
     "devDependencies": {
         "@types/color-convert": "^1.9.0",
-        "@types/node": "^13.11.1",
-        "@typescript-eslint/eslint-plugin": "^2.27.0",
-        "@typescript-eslint/parser": "^2.27.0",
+        "@types/node": "^13.13.12",
+        "@typescript-eslint/eslint-plugin": "^2.34.0",
+        "@typescript-eslint/parser": "^2.34.0",
         "eslint": "^6.8.0",
         "eslint-config-google": "^0.14.0",
-        "typescript": "^3.9.2",
+        "hap-nodejs": "^0.7.3",
         "homebridge": "^1.1.0",
-        "hap-nodejs": "^0.7.3"
+        "typescript": "^3.9.5"
     }
 }
