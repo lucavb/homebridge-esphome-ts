@@ -1,9 +1,9 @@
-import {API, DynamicPlatformPlugin, Logging, PlatformAccessory, PlatformConfig} from "homebridge";
-import {EspDevice} from "esphome-ts/dist";
-import {Subscription} from "rxjs";
-import {filter, take, tap} from "rxjs/operators";
-import {componentHelpers} from "./homebridgeAccessories/componentHelpers";
-import {PLATFORM_NAME, PLUGIN_NAME, UUIDGen, Accessory} from "./index";
+import {API, DynamicPlatformPlugin, Logging, PlatformAccessory, PlatformConfig} from 'homebridge';
+import {of, Subscription} from 'rxjs';
+import {catchError, filter, take, tap, timeout} from 'rxjs/operators';
+import {componentHelpers} from './homebridgeAccessories/componentHelpers';
+import {Accessory, PLATFORM_NAME, PLUGIN_NAME, UUIDGen} from './index';
+import {EspDevice} from 'esphome-ts/dist';
 
 interface IEsphomePlatformConfig extends PlatformConfig {
     devices?: {
@@ -48,7 +48,16 @@ export class EsphomePlatform implements DynamicPlatformPlugin {
             device.discovery$.pipe(
                 filter((value: boolean) => value),
                 take(1),
+                timeout(10 * 1000),
                 tap(() => this.addAccessories(device)),
+                catchError((err) => {
+                    if (err.name === 'TimeoutError') {
+                        this.log.warn(`The device under the host ${deviceConfig.host} could not be reached.`);
+                        return of(err);
+                    } else {
+                        return of(err);
+                    }
+                }),
             ).subscribe();
             this.espDevices.push(device);
         });
