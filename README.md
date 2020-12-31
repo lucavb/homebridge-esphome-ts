@@ -49,7 +49,7 @@ on esphome please check out their website.
 ## Blacklisting
 
 If for some reason you want to exclude a specific component from this plugin just
-add a key containing its name to a string array under the key `blacklist`:
+add a key containing its name (as it was defined in esphome and is shown initially in HomeKit) to a string array under the key `blacklist`:
 
 ```json
 {
