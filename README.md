@@ -16,7 +16,8 @@ my two :)
 
 ## Installation
 
-Unless you haven't done so already, make sure to install homebridge first. See instructions [here](https://github.com/homebridge/homebridge/wiki). Once you have done this, you can install this plugin by typing
+Unless you haven't done so already, make sure to install homebridge first. See instructions
+[here](https://github.com/homebridge/homebridge/wiki). Once you have done this, you can install this plugin by typing
 
 ```
 npm i -g homebridge-esphome-ts
@@ -33,9 +34,11 @@ Once this is done, you can configure your homebridge config.json according to th
         {
             "host": "my_esp.local",
             "password": "Passw0rd!",
-            "port": 9001
+            "port": 9001,
+            "retryAfter": 120000 // optional, time in milliseconds!
         }
-    ]
+    ],
+    "retryAfter": 60000 // optional, time in milliseconds!
 }
 ```
 
@@ -47,7 +50,13 @@ In case you don't have a working esphome configuration you can have look at the 
 find both an example homebridge `config.json` file as well as an example esphome configuration. For further guidance
 on esphome please check out their website.
 
-## Blacklisting
+### retryAfter
+
+Both `retryAfter` keys are as explained optional and need to contain an integer that tells this plugin
+after what time frame it should try to reconnect. Keep in mind that this value needs to be in _milliseconds_. The inner
+`retryAfter` will trump the outer value if present. The default value is 90 seconds.
+
+### Blacklisting
 
 If for some reason you want to exclude a specific component from this plugin just
 add a key containing its name (as it was defined in esphome and is shown initially in HomeKit) to a string array under the key `blacklist`:
