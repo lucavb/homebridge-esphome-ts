@@ -11,7 +11,6 @@ export let Service: typeof HAPService;
 export let Characteristic: typeof HAPCharacteristic;
 
 export default (homebridge: API) => {
-
     // Accessory must be created from PlatformAccessory Constructor
     Accessory = homebridge.platformAccessory;
 

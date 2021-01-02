@@ -6,17 +6,18 @@ so that you can expect instant updates for all your binary sensors what have you
 
 Supported components include:
 
-* Lights
-* Switches
-* BinarySensors (motion, window, door, smoke and leakage)
-* Sensors (temperature & humidity at the moment)
+-   Lights
+-   Switches
+-   BinarySensors (motion, window, door, smoke and leakage)
+-   Sensors (temperature & humidity at the moment)
 
 This project is currently still in beta, but I thought that many eyes see more than just
 my two :)
 
 ## Installation
 
-Unless you haven't done so already, make sure to install homebridge first. See instructions [here](https://github.com/homebridge/homebridge/wiki). Once you have done this, you can install this plugin by typing 
+Unless you haven't done so already, make sure to install homebridge first. See instructions [here](https://github.com/homebridge/homebridge/wiki). Once you have done this, you can install this plugin by typing
+
 ```
 npm i -g homebridge-esphome-ts
 ```
@@ -63,12 +64,11 @@ add a key containing its name (as it was defined in esphome and is shown initial
 }
 ```
 
-
 ## Todo
 
-- [x] Implement a blacklist for components
-- [ ] Testing, especially with the new homebridge version
-- [x] Implement sensor component
+-   [x] Implement a blacklist for components
+-   [ ] Testing, especially with the new homebridge version
+-   [x] Implement sensor component
 
 ## Troubleshooting
 

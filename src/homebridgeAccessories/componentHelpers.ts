@@ -1,9 +1,9 @@
-import {ComponentType} from 'esphome-ts/dist/components/entities';
-import {lightHelper} from './light';
-import {binarySensorHelper} from './binarySensor';
-import {sensorHelper} from './sensor';
-import {switchHelper} from './switch';
-import {PlatformAccessory} from 'homebridge';
+import { lightHelper } from './light';
+import { binarySensorHelper } from './binarySensor';
+import { sensorHelper } from './sensor';
+import { switchHelper } from './switch';
+import { PlatformAccessory } from 'homebridge';
+import { ComponentType } from 'esphome-ts';
 
 export type ComponentHelper = (component: any, accessory: PlatformAccessory) => boolean;
 

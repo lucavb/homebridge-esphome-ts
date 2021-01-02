@@ -1,30 +1,35 @@
-import {API, DynamicPlatformPlugin, Logging, PlatformAccessory, PlatformConfig} from 'homebridge';
-import {of, Subscription} from 'rxjs';
-import {catchError, filter, take, tap, timeout} from 'rxjs/operators';
-import {componentHelpers} from './homebridgeAccessories/componentHelpers';
-import {Accessory, PLATFORM_NAME, PLUGIN_NAME, UUIDGen} from './index';
-import {EspDevice} from 'esphome-ts/dist';
+import { API, DynamicPlatformPlugin, Logging, PlatformAccessory, PlatformConfig } from 'homebridge';
+import { interval, of, Subscription } from 'rxjs';
+import { catchError, filter, take, tap, timeout } from 'rxjs/operators';
+import { componentHelpers } from './homebridgeAccessories/componentHelpers';
+import { Accessory, PLATFORM_NAME, PLUGIN_NAME, UUIDGen } from './index';
+import { EspDevice } from 'esphome-ts/dist';
 
 interface IEsphomePlatformConfig extends PlatformConfig {
     devices?: {
         host: string;
         password?: string;
         port?: number;
-    }[],
+        retryAfter?: number;
+    }[];
     blacklist?: string[];
     debug?: boolean;
+    retryAfter?: number;
 }
 
-export class EsphomePlatform implements DynamicPlatformPlugin {
+const DEFAULT_RETRY_AFTER = 90 * 1000;
 
+export class EsphomePlatform implements DynamicPlatformPlugin {
     protected readonly espDevices: EspDevice[] = [];
     protected readonly blacklistSet: Set<string>;
     protected readonly subscription: Subscription;
     protected readonly accessories: PlatformAccessory[] = [];
 
-    constructor(protected readonly log: Logging,
-                protected readonly config: IEsphomePlatformConfig,
-                protected readonly api: API) {
+    constructor(
+        protected readonly log: Logging,
+        protected readonly config: IEsphomePlatformConfig,
+        protected readonly api: API,
+    ) {
         this.subscription = new Subscription();
         this.log('starting esphome');
         if (!Array.isArray(this.config.devices)) {
@@ -70,7 +75,7 @@ export class EsphomePlatform implements DynamicPlatformPlugin {
                 this.logIfDebug(`not processing ${component.name} because it was blacklisted`);
                 continue;
             }
-            const componentHelper = componentHelpers.get(component.getType);
+            const componentHelper = componentHelpers.get(component.type);
             if (!componentHelper) {
                 this.log(`${component.name} is currently not supported. You might want to file an issue on Github.`);
                 continue;
@@ -78,7 +83,8 @@ export class EsphomePlatform implements DynamicPlatformPlugin {
             const uuid = UUIDGen.generate(component.name);
             let newAccessory = false;
             let accessory: PlatformAccessory | undefined = this.accessories.find(
-                (accessory) => accessory.UUID === uuid);
+                (accessory) => accessory.UUID === uuid,
+            );
             if (!accessory) {
                 this.logIfDebug(`${component.name} must be a new accessory`);
                 accessory = new Accessory(component.name, uuid);
