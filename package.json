@@ -3,6 +3,7 @@
     "version": "1.0.2",
     "description": "New plugin for integrating for esphome into homebridge",
     "main": "dist/index.js",
+    "types": "dist/index.d.ts",
     "scripts": {
         "format": "npx eslint --fix src/**/*.ts",
         "prepack": "npm run format && npm run cbuild",
@@ -13,7 +14,7 @@
     },
     "repository": "https://github.com/lucavb/homebridge-esphome-ts",
     "files": [
-        "/dist",
+        "dist",
         "config.schema.json"
     ],
     "keywords": [
@@ -28,20 +29,24 @@
         "homebridge": ">=0.4.0"
     },
     "dependencies": {
-        "color-convert": "^2.0.1",
-        "esphome-ts": "^2.1.5",
-        "protobufjs": "^6.9.0",
-        "rxjs": "^6.5.5"
+        "color-convert": "2.0.1",
+        "esphome-ts": "3.0.3",
+        "rxjs": "6.6.3"
     },
     "devDependencies": {
-        "@types/color-convert": "^1.9.0",
-        "@types/node": "^14.14.16",
-        "@typescript-eslint/eslint-plugin": "^2.34.0",
-        "@typescript-eslint/parser": "^2.34.0",
-        "eslint": "^6.8.0",
-        "eslint-config-google": "^0.14.0",
+        "@types/color-convert": "1.9.0",
+        "@types/node": "14.14.19",
+        "@typescript-eslint/eslint-plugin": "2.34.0",
+        "@typescript-eslint/parser": "2.34.0",
+        "eslint": "7.17.0",
+        "eslint-config-google": "0.14.0",
+        "eslint-config-prettier": "7.1.0",
+        "eslint-plugin-import": "2.22.1",
+        "eslint-plugin-prettier": "3.3.0",
         "hap-nodejs": "0.8.5",
         "homebridge": "1.2.5",
-        "typescript": "^4.1.3"
+        "prettier": "2.2.1",
+        "prettier-eslint": "12.0.0",
+        "typescript": "4.1.3"
     }
 }
