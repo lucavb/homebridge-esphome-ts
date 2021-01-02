@@ -3,7 +3,7 @@ import { interval, of, Subscription } from 'rxjs';
 import { catchError, filter, take, tap, timeout } from 'rxjs/operators';
 import { componentHelpers } from './homebridgeAccessories/componentHelpers';
 import { Accessory, PLATFORM_NAME, PLUGIN_NAME, UUIDGen } from './index';
-import { EspDevice } from 'esphome-ts/dist';
+import { EspDevice } from 'esphome-ts';
 
 interface IEsphomePlatformConfig extends PlatformConfig {
     devices?: {
@@ -50,20 +50,27 @@ export class EsphomePlatform implements DynamicPlatformPlugin {
     protected onHomebridgeDidFinishLaunching(): void {
         this.config.devices?.forEach((deviceConfig) => {
             const device = new EspDevice(deviceConfig.host, deviceConfig.password, deviceConfig.port);
-            device.discovery$.pipe(
-                filter((value: boolean) => value),
-                take(1),
-                timeout(10 * 1000),
-                tap(() => this.addAccessories(device)),
-                catchError((err) => {
-                    if (err.name === 'TimeoutError') {
-                        this.log.warn(`The device under the host ${deviceConfig.host} could not be reached.`);
-                        return of(err);
-                    } else {
-                        return of(err);
-                    }
-                }),
-            ).subscribe();
+            device.provideRetryObservable(
+                interval(deviceConfig.retryAfter ?? this.config.retryAfter ?? DEFAULT_RETRY_AFTER).pipe(
+                    tap(() => this.log.info(`Trying to reconnect now to device ${deviceConfig.host}`)),
+                ),
+            );
+            device.discovery$
+                .pipe(
+                    filter((value: boolean) => value),
+                    take(1),
+                    timeout(10 * 1000),
+                    tap(() => this.addAccessories(device)),
+                    catchError((err) => {
+                        if (err.name === 'TimeoutError') {
+                            this.log.warn(`The device under the host ${deviceConfig.host} could not be reached.`);
+                            return of(err);
+                        } else {
+                            return of(err);
+                        }
+                    }),
+                )
+                .subscribe();
             this.espDevices.push(device);
         });
     }
