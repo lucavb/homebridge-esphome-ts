@@ -10,7 +10,8 @@
         "build": "npx tsc",
         "test": "npx jest",
         "clean": "rm -rf dist",
-        "cbuild": "npm run clean && npm run build"
+        "cbuild": "npm run clean && npm run build",
+        "integration:test": "homebridge -U examples -P ."
     },
     "repository": "https://github.com/lucavb/homebridge-esphome-ts",
     "files": [
@@ -30,7 +31,7 @@
     },
     "dependencies": {
         "color-convert": "2.0.1",
-        "esphome-ts": "3.0.3",
+        "esphome-ts": "3.0.5",
         "rxjs": "6.6.3"
     },
     "devDependencies": {
