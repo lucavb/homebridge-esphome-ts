@@ -30,7 +30,7 @@
     },
     "dependencies": {
         "color-convert": "2.0.1",
-        "esphome-ts": "3.0.3",
+        "esphome-ts": "3.0.5",
         "rxjs": "6.6.3"
     },
     "devDependencies": {
