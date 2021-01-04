@@ -29,7 +29,7 @@
     },
     "dependencies": {
         "color-convert": "^2.0.1",
-        "esphome-ts": "^2.1.5",
+        "esphome-ts": "^3.0.5",
         "protobufjs": "^6.9.0",
         "rxjs": "^6.5.5"
     },
