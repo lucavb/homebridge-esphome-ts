@@ -8,7 +8,7 @@ import {
 } from 'homebridge';
 import { Characteristic, Service } from '../index';
 import { ComponentHelper } from './componentHelpers';
-import { LightComponent } from 'esphome-ts';
+import { DEFAULT_NO_EFFECT, LightComponent, LightStateEvent } from 'esphome-ts';
 
 export const lightHelper: ComponentHelper = (component: LightComponent, accessory: PlatformAccessory): boolean => {
     let lightBulbService: HAPService | undefined = accessory.services.find(
@@ -17,23 +17,6 @@ export const lightHelper: ComponentHelper = (component: LightComponent, accessor
     if (!lightBulbService) {
         lightBulbService = accessory.addService(new Service.Lightbulb(component.name, ''));
     }
-    component.state$
-        .pipe(
-            tap((state) => {
-                lightBulbService!.getCharacteristic(Characteristic.On)?.updateValue(!!state.state);
-                if (component.supportsRgb) {
-                    const hsv = component.hsv;
-                    lightBulbService!.getCharacteristic(Characteristic.Hue)?.updateValue(hsv.hue);
-                    lightBulbService!.getCharacteristic(Characteristic.Saturation)?.updateValue(hsv.saturation);
-                    lightBulbService!.getCharacteristic(Characteristic.Brightness)?.updateValue(hsv.value);
-                } else if (component.supportsBrightness) {
-                    lightBulbService!
-                        .getCharacteristic(Characteristic.Brightness)
-                        ?.updateValue((state.brightness ?? 0) * 100);
-                }
-            }),
-        )
-        .subscribe();
 
     if (component.supportsRgb) {
         let lastHue: number | undefined;
@@ -74,7 +57,9 @@ export const lightHelper: ComponentHelper = (component: LightComponent, accessor
             ?.on(
                 CharacteristicEventTypes.SET,
                 (brightness: CharacteristicValue, callback: CharacteristicSetCallback) => {
-                    component.setBrightness(brightness as number);
+                    if (typeof brightness === 'number') {
+                        component.setBrightness(brightness);
+                    }
                     callback();
                 },
             );
@@ -86,6 +71,63 @@ export const lightHelper: ComponentHelper = (component: LightComponent, accessor
             !!on ? component.turnOn() : component.turnOff();
             callback();
         });
+
+    const effects = component
+        .availableEffects()
+        .filter((effect: string) => effect !== DEFAULT_NO_EFFECT)
+        .map((effect: string) => {
+            const switchName = `${component.name} - ${effect}`;
+            const switchSubType = `${effect} Switch`;
+            let switchService: HAPService | undefined = accessory.services.find(
+                (service: HAPService) => service.UUID === Service.Switch.UUID && service.subtype === switchSubType,
+            );
+            if (!switchService) {
+                switchService = accessory.addService(new Service.Switch(switchName, switchSubType));
+            }
+            return {
+                service: switchService,
+                name: effect,
+            };
+        });
+
+    if (effects.length > 0) {
+        effects.forEach(({ name, service }): void => {
+            service
+                ?.getCharacteristic(Characteristic.On)
+                ?.on(CharacteristicEventTypes.SET, (on: CharacteristicValue, callback: CharacteristicSetCallback) => {
+                    component.effect = on ? name : DEFAULT_NO_EFFECT;
+                    effects
+                        .filter(({ name: otherEffectName }) => otherEffectName !== name)
+                        .forEach(({ service: otherEffectService }) => {
+                            otherEffectService?.getCharacteristic(Characteristic.On).updateValue(false);
+                        });
+                    callback();
+                });
+        });
+    }
+
+    component.state$
+        .pipe(
+            tap((state: LightStateEvent) => {
+                lightBulbService!.getCharacteristic(Characteristic.On)?.updateValue(!!state.state);
+                if (component.supportsRgb) {
+                    const hsv = component.hsv;
+                    lightBulbService!.getCharacteristic(Characteristic.Hue)?.updateValue(hsv.hue);
+                    lightBulbService!.getCharacteristic(Characteristic.Saturation)?.updateValue(hsv.saturation);
+                    lightBulbService!.getCharacteristic(Characteristic.Brightness)?.updateValue(hsv.value);
+                } else if (component.supportsBrightness) {
+                    lightBulbService!
+                        .getCharacteristic(Characteristic.Brightness)
+                        ?.updateValue((state.brightness ?? 0) * 100);
+                }
+                if (effects.length > 0) {
+                    effects.forEach(({ name: effectName, service: effectService }): void => {
+                        effectService?.getCharacteristic(Characteristic.On)?.updateValue(effectName === state.effect);
+                    });
+                }
+            }),
+        )
+        .subscribe();
 
     return true;
 };

@@ -1,6 +1,6 @@
 {
     "name": "homebridge-esphome-ts",
-    "version": "1.1.1",
+    "version": "1.2.1",
     "description": "New plugin for integrating for esphome into homebridge",
     "main": "dist/index.js",
     "types": "dist/index.d.ts",
@@ -10,7 +10,8 @@
         "build": "npx tsc",
         "test": "npx jest",
         "clean": "rm -rf dist",
-        "cbuild": "npm run clean && npm run build"
+        "cbuild": "npm run clean && npm run build",
+        "integration:test": "homebridge -U examples -P ."
     },
     "repository": "https://github.com/lucavb/homebridge-esphome-ts",
     "files": [
