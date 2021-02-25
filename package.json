@@ -32,7 +32,7 @@
     "dependencies": {
         "color-convert": "2.0.1",
         "esphome-ts": "3.0.5",
-        "rxjs": "6.6.3"
+        "rxjs": "6.6.6"
     },
     "devDependencies": {
         "@types/color-convert": "2.0.0",
