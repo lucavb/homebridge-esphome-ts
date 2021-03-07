@@ -64,10 +64,8 @@ export class EsphomePlatform implements DynamicPlatformPlugin {
                     catchError((err) => {
                         if (err.name === 'TimeoutError') {
                             this.log.warn(`The device under the host ${deviceConfig.host} could not be reached.`);
-                            return of(err);
-                        } else {
-                            return of(err);
                         }
+                        return of(err);
                     }),
                 )
                 .subscribe();
