@@ -46,6 +46,10 @@ Only the `host` key is mandatory under devices. As password `''` is assumed aka 
 port number 6053 is also wired into the plugin. You can add, in theory, as many ESP devices as you want to
 that array.
 
+If some of your devices are password-less you can enable devices discovery to let the plugin find all your
+devices by setting `discover: true` in platform configuration. In case if you don't have any password-secured
+devices you can even fully omit `"devices"` section in platform configuration.
+
 In case you don't have a working esphome configuration you can have look at the examples folder. There you will
 find both an example homebridge `config.json` file as well as an example esphome configuration. For further guidance
 on esphome please check out their website.

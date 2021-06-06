@@ -15,7 +15,9 @@
                 {
                     "host": "my_esp.local"
                 }
-            ]
+            ],
+            "discover": true,
+            "discoveryTimeout": 6000
         }
     ]
 }
