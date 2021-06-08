@@ -87,3 +87,9 @@ If you still have problems please feel free to open a ticket on GitHub. Before d
 config `"debug": true`. The plugin will now output what it has gotten from your ESP device.
 Please append this when you open a ticket here on GitHub. Please attach your config as well and make
 sure to remove any sensitive information such as WiFi passwords.
+
+In addition to simply writing stuff to the console, it will also write everything received from your devices to individual
+files under `/tmp`. You can then submit these files with any issues you might file on GitHub.
+
+_Slight warning_ The writing of these files means that it will also occupy more space on your SD card or whatever you
+might have. So simply turn off this option once you don't need it anymore.

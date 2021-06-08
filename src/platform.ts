@@ -3,7 +3,8 @@ import { interval, of, Subscription } from 'rxjs';
 import { catchError, filter, take, tap, timeout } from 'rxjs/operators';
 import { componentHelpers } from './homebridgeAccessories/componentHelpers';
 import { Accessory, PLATFORM_NAME, PLUGIN_NAME, UUIDGen } from './index';
-import { EspDevice } from 'esphome-ts';
+import { BaseComponent, EspDevice } from 'esphome-ts';
+import { isRecord, writeReadDataToLogFile } from './shared';
 
 interface IEsphomePlatformConfig extends PlatformConfig {
     devices?: {
@@ -50,6 +51,10 @@ export class EsphomePlatform implements DynamicPlatformPlugin {
     protected onHomebridgeDidFinishLaunching(): void {
         this.config.devices?.forEach((deviceConfig) => {
             const device = new EspDevice(deviceConfig.host, deviceConfig.password, deviceConfig.port);
+            if (this.config.debug) {
+                this.log('Writing the raw data from your ESP Device to /tmp');
+                writeReadDataToLogFile(deviceConfig.host, device);
+            }
             device.provideRetryObservable(
                 interval(deviceConfig.retryAfter ?? this.config.retryAfter ?? DEFAULT_RETRY_AFTER).pipe(
                     tap(() => this.log.info(`Trying to reconnect now to device ${deviceConfig.host}`)),
@@ -112,7 +117,7 @@ export class EsphomePlatform implements DynamicPlatformPlugin {
         this.logIfDebug(device.components);
     }
 
-    configureAccessory(accessory: PlatformAccessory): void {
+    public configureAccessory(accessory: PlatformAccessory): void {
         if (!this.blacklistSet.has(accessory.displayName)) {
             this.accessories.push(accessory);
             this.logIfDebug(`cached accessory ${accessory.displayName} was added`);
@@ -122,7 +127,7 @@ export class EsphomePlatform implements DynamicPlatformPlugin {
         }
     }
 
-    private logIfDebug(msg?: any, parameters?: any[]): void {
+    private logIfDebug(msg?: any, ...parameters: unknown[]): void {
         if (this.config.debug) {
             this.log(msg, parameters);
         } else {
