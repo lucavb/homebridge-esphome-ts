@@ -9,7 +9,10 @@ export const sensorHelper = (component: SensorComponent, accessory: PlatformAcce
     if (isTemperatureComponent(component.unitOfMeasurement)) {
         defaultSetup(component, accessory, Service.TemperatureSensor, Characteristic.CurrentTemperature);
         return true;
-    } else if (component.unitOfMeasurement === '%' && component.icon === 'mdi:water-percent') {
+    } else if (
+        component.unitOfMeasurement === '%' &&
+        (component.icon === 'mdi:water-percent' || component.deviceClass === 'humidity')
+    ) {
         defaultSetup(component, accessory, Service.HumiditySensor, Characteristic.CurrentRelativeHumidity);
         return true;
     }
