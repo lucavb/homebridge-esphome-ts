@@ -1,6 +1,6 @@
 import { API, DynamicPlatformPlugin, Logging, PlatformAccessory, PlatformConfig } from 'homebridge';
 import { concat, from, interval, Observable, of, Subscription } from 'rxjs';
-import { catchError, filter, map, take, tap, timeout } from 'rxjs/operators';
+import { catchError, filter, map, mergeMap, take, tap, timeout } from 'rxjs/operators';
 import { componentHelpers } from './homebridgeAccessories/componentHelpers';
 import { Accessory, PLATFORM_NAME, PLUGIN_NAME, UUIDGen } from './index';
 import { writeReadDataToLogFile } from './shared';
@@ -62,7 +62,7 @@ export class EsphomePlatform implements DynamicPlatformPlugin {
         if (this.config.discover) {
             const excludeConfigDevices: Set<string> = new Set();
             devices = concat(
-                discoverDevices(this.config.discoveryTimeout ?? DEFAULT_DISCOVERY_TIMEOUT).pipe(
+                discoverDevices(this.config.discoveryTimeout ?? DEFAULT_DISCOVERY_TIMEOUT, this.log).pipe(
                     map((discoveredDevice) => {
                         const configDevice = this.config.devices?.find(({ host }) => host === discoveredDevice.host);
                         let deviceConfig = discoveredDevice;
@@ -84,33 +84,38 @@ export class EsphomePlatform implements DynamicPlatformPlugin {
             );
         }
 
-        devices.forEach((deviceConfig) => {
-            const device = new EspDevice(deviceConfig.host, deviceConfig.password, deviceConfig.port);
-            if (this.config.debug) {
-                this.log('Writing the raw data from your ESP Device to /tmp');
-                writeReadDataToLogFile(deviceConfig.host, device);
-            }
-            device.provideRetryObservable(
-                interval(deviceConfig.retryAfter ?? this.config.retryAfter ?? DEFAULT_RETRY_AFTER).pipe(
-                    tap(() => this.log.info(`Trying to reconnect now to device ${deviceConfig.host}`)),
-                ),
-            );
-            device.discovery$
+        this.subscription.add(
+            devices
                 .pipe(
-                    filter((value: boolean) => value),
-                    take(1),
-                    timeout(10 * 1000),
-                    tap(() => this.addAccessories(device)),
-                    catchError((err) => {
-                        if (err.name === 'TimeoutError') {
-                            this.log.warn(`The device under the host ${deviceConfig.host} could not be reached.`);
+                    mergeMap((deviceConfig) => {
+                        const device = new EspDevice(deviceConfig.host, deviceConfig.password, deviceConfig.port);
+                        if (this.config.debug) {
+                            this.log('Writing the raw data from your ESP Device to /tmp');
+                            writeReadDataToLogFile(deviceConfig.host, device);
                         }
-                        return of(err);
+                        device.provideRetryObservable(
+                            interval(deviceConfig.retryAfter ?? this.config.retryAfter ?? DEFAULT_RETRY_AFTER).pipe(
+                                tap(() => this.log.info(`Trying to reconnect now to device ${deviceConfig.host}`)),
+                            ),
+                        );
+                        return device.discovery$.pipe(
+                            filter((value: boolean) => value),
+                            take(1),
+                            timeout(10 * 1000),
+                            tap(() => this.addAccessories(device)),
+                            catchError((err) => {
+                                if (err.name === 'TimeoutError') {
+                                    this.log.warn(
+                                        `The device under the host ${deviceConfig.host} could not be reached.`,
+                                    );
+                                }
+                                return of(err);
+                            }),
+                        );
                     }),
                 )
-                .subscribe();
-            this.espDevices.push(device);
-        });
+                .subscribe(),
+        );
     }
 
     private addAccessories(device: EspDevice): void {
