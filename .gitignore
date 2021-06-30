@@ -40,3 +40,7 @@ dist/**/*
 # ignore yarn.lock
 yarn.lock
 
+# Homebridge runtime data
+examples/persist
+examples/accessories
+

@@ -32,6 +32,17 @@
                 "title": "Debug",
                 "type": "boolean",
                 "required": false
+            },
+            "discover": {
+                "title": "Discover devices",
+                "type": "boolean",
+                "required": false
+            },
+            "discoveryTimeout": {
+                "title": "Discovery timeout",
+                "type": "integer",
+                "minimum": 0,
+                "required": false
             }
         }
     },
@@ -52,6 +63,7 @@
                 }
             ]
         },
-        "debug"
+        "debug",
+        "discover"
     ]
 }
