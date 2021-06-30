@@ -1,6 +1,6 @@
-import {API, Characteristic as HAPCharacteristic, PlatformAccessory, Service as HAPService} from 'homebridge';
+import { API, Characteristic as HAPCharacteristic, PlatformAccessory, Service as HAPService } from 'homebridge';
 import * as uuidFunctions from 'hap-nodejs/dist/lib/util/uuid';
-import {EsphomePlatform} from './platform';
+import { EsphomePlatform } from './platform';
 
 export const PLUGIN_NAME = 'homebridge-esphome-ts';
 export const PLATFORM_NAME = 'esphome';

@@ -5,13 +5,15 @@
     "main": "dist/index.js",
     "types": "dist/index.d.ts",
     "scripts": {
-        "format": "npx eslint --fix src/**/*.ts",
-        "prepack": "npm run format && npm run cbuild",
-        "build": "npx tsc",
-        "test": "npx jest",
-        "clean": "rm -rf dist",
+        "build": "tsc",
         "cbuild": "npm run clean && npm run build",
-        "integration:test": "homebridge -U examples -P ."
+        "clean": "rm -rf dist",
+        "format": "npm run format:eslint && npm run format:prettier",
+        "format:eslint": "eslint --fix src/**/*.ts",
+        "format:prettier": "prettier -w --ignore-unknown ./src",
+        "integration:test": "homebridge -U examples -P .",
+        "prepack": "npm run format && npm run cbuild",
+        "test": "jest"
     },
     "repository": "https://github.com/lucavb/homebridge-esphome-ts",
     "files": [

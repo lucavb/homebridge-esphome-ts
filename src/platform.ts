@@ -42,7 +42,7 @@ export class EsphomePlatform implements DynamicPlatformPlugin {
         if (!Array.isArray(this.config.devices) && !this.config.discover) {
             this.log.error(
                 'You did not specify a devices array and discovery is ' +
-                'disabled! Esphome will not provide any accessories',
+                    'disabled! Esphome will not provide any accessories',
             );
             this.config.devices = [];
         }
