@@ -68,7 +68,7 @@ export const lightHelper: ComponentHelper = (component: LightComponent, accessor
     lightBulbService
         .getCharacteristic(Characteristic.On)
         ?.on(CharacteristicEventTypes.SET, (on: CharacteristicValue, callback: CharacteristicSetCallback) => {
-            !!on ? component.turnOn() : component.turnOff();
+            on ? component.turnOn() : component.turnOff();
             callback();
         });
 
