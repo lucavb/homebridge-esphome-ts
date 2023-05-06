@@ -41,6 +41,7 @@ const defaultSetup = (
 
     component.state$
         .pipe(
+            // @ts-ignore
             tap(() =>
                 targetSensor
                     ?.getCharacteristic(SelectedCharacteristic)
