@@ -1,7 +1,7 @@
 import { tap } from 'rxjs/operators';
 import { Characteristic, Service } from '../index';
 import { SensorComponent } from 'esphome-ts';
-import { PlatformAccessory, Service as HAPService } from 'homebridge';
+import { CharacteristicValue, PlatformAccessory, Service as HAPService } from 'homebridge';
 
 const isTemperatureComponent = (unitOfMeasurement: unknown) => unitOfMeasurement === '°C' || unitOfMeasurement === '°F';
 
@@ -15,6 +15,10 @@ export const sensorHelper = (component: SensorComponent, accessory: PlatformAcce
     ) {
         defaultSetup(component, accessory, Service.HumiditySensor, Characteristic.CurrentRelativeHumidity);
         return true;
+    } else if (component.unitOfMeasurement === 'µg/m³') {
+        // && component.icon === 'mdi:air-filter'
+        defaultSetup(component, accessory, Service.AirQualitySensor, Characteristic.PM2_5Density);
+        return true;
     }
     return false;
 };
@@ -22,17 +26,26 @@ export const sensorHelper = (component: SensorComponent, accessory: PlatformAcce
 const defaultSetup = (
     component: SensorComponent,
     accessory: PlatformAccessory,
-    SelectedService: typeof Service.TemperatureSensor | typeof Service.HumiditySensor,
-    SelectedCharacteristic: typeof Characteristic.CurrentTemperature | typeof Characteristic.CurrentRelativeHumidity,
+    SelectedService: typeof Service.TemperatureSensor | typeof Service.HumiditySensor | typeof Service.AirQualitySensor,
+    SelectedCharacteristic:
+        | typeof Characteristic.CurrentTemperature
+        | typeof Characteristic.CurrentRelativeHumidity
+        | typeof Characteristic.PM2_5Density,
 ): void => {
-    let temperatureSensor: HAPService | undefined = accessory.services.find(
+    let targetSensor: HAPService | undefined = accessory.services.find(
         (service) => service.UUID === SelectedService.UUID,
     );
-    if (!temperatureSensor) {
-        temperatureSensor = accessory.addService(new SelectedService(component.name, ''));
+    if (!targetSensor) {
+        targetSensor = accessory.addService(new SelectedService(component.name, ''));
     }
 
     component.state$
-        .pipe(tap(() => temperatureSensor?.getCharacteristic(SelectedCharacteristic)?.setValue(component.value!)))
+        .pipe(
+            tap(() =>
+                targetSensor
+                    ?.getCharacteristic(SelectedCharacteristic)
+                    ?.setValue(component.value! as CharacteristicValue),
+            ),
+        )
         .subscribe();
 };
