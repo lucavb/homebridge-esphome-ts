@@ -29,8 +29,8 @@
     "author": "Luca Becker <luca.becker@sunbury.xyz> (https://sunbury.xyz/)",
     "license": "GPL-3.0",
     "engines": {
-        "node": ">=0.12.0",
-        "homebridge": ">=0.4.0"
+        "node": ">=16.0",
+        "homebridge": ">=10.0"
     },
     "dependencies": {
         "bonjour-hap": "3.6.3",
