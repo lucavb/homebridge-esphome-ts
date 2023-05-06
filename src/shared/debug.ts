@@ -13,6 +13,7 @@ export const writeReadDataToLogFile = (host: string, device: EspDevice): void =>
         const fileName = `esphome-log-${Date.now()}-${host}.json`;
         socket.espData$
             .pipe(
+                // @ts-ignore
                 map(
                     (data: ReadData): Record<string, string | number> => ({
                         type: data.type,

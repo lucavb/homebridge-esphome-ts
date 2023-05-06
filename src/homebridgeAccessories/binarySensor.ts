@@ -78,6 +78,7 @@ export const binarySensorHelper = (component: BinarySensorComponent, accessory: 
 
         component.state$
             .pipe(
+                // @ts-ignore
                 tap(() => {
                     service?.getCharacteristic(homekitStuff.characteristic)?.setValue(component.status);
                 }),

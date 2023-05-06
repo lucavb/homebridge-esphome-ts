@@ -11,6 +11,7 @@ export const switchHelper = (component: SwitchComponent, accessory: PlatformAcce
     }
 
     component.state$
+        // @ts-ignore
         .pipe(tap(() => service?.getCharacteristic(Characteristic.On)?.setValue(component.status)))
         .subscribe();
 

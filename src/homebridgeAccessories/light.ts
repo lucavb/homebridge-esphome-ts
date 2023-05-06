@@ -108,6 +108,7 @@ export const lightHelper: ComponentHelper = (component: LightComponent, accessor
 
     component.state$
         .pipe(
+            // @ts-ignore
             tap((state: LightStateEvent) => {
                 lightBulbService!.getCharacteristic(Characteristic.On)?.updateValue(!!state.state);
                 if (component.supportsRgb) {
