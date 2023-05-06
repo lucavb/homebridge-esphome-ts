@@ -87,6 +87,7 @@ export class EsphomePlatform implements DynamicPlatformPlugin {
         this.subscription.add(
             devices
                 .pipe(
+                    // @ts-ignore
                     mergeMap((deviceConfig) => {
                         const device = new EspDevice(deviceConfig.host, deviceConfig.password, deviceConfig.port);
                         if (this.config.debug) {
@@ -94,11 +95,13 @@ export class EsphomePlatform implements DynamicPlatformPlugin {
                             writeReadDataToLogFile(deviceConfig.host, device);
                         }
                         device.provideRetryObservable(
+                            // @ts-ignore
                             interval(deviceConfig.retryAfter ?? this.config.retryAfter ?? DEFAULT_RETRY_AFTER).pipe(
                                 tap(() => this.log.info(`Trying to reconnect now to device ${deviceConfig.host}`)),
                             ),
                         );
                         return device.discovery$.pipe(
+                            // @ts-ignore
                             filter((value: boolean) => value),
                             take(1),
                             timeout(10 * 1000),
