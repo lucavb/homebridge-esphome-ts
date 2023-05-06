@@ -1,5 +1,4 @@
 import { SensorComponent } from 'esphome-ts';
-import { AirQualitySensor } from 'hap-nodejs/dist/lib/definitions';
 import { CharacteristicValue, PlatformAccessory, Service as HAPService } from 'homebridge';
 import { tap } from 'rxjs/operators';
 import { Characteristic, Service } from '../index';
@@ -48,12 +47,13 @@ const defaultSetup = (
         )
         .subscribe();
 };
+
 const airQualitySetup = (component: SensorComponent, accessory: PlatformAccessory): void => {
     let targetSensor: HAPService | undefined = accessory.services.find(
-        (service) => service.UUID === AirQualitySensor.UUID,
+        (service) => service.UUID === Service.AirQualitySensor.UUID,
     );
     if (!targetSensor) {
-        targetSensor = accessory.addService(new AirQualitySensor(component.name, ''));
+        targetSensor = accessory.addService(new Service.AirQualitySensor(component.name, ''));
     }
 
     component.state$
