@@ -1,9 +1,10 @@
 {
-    "name": "homebridge-esphome-ts",
+    "name": "@seiry/homebridge-esphome-ts",
     "version": "1.5.1",
     "description": "New plugin for integrating for esphome into homebridge",
     "main": "dist/index.js",
     "types": "dist/index.d.ts",
+    "private": false,
     "scripts": {
         "build": "tsc",
         "cbuild": "npm run clean && npm run build",
