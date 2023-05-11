@@ -3,7 +3,7 @@ import { Characteristic, Service } from '../index';
 import { SensorComponent } from 'esphome-ts';
 import { PlatformAccessory, Service as HAPService } from 'homebridge';
 
-const fahrenheitUnit = 'ºF';
+const fahrenheitUnit = '°F';
 
 const isTemperatureComponent = (unitOfMeasurement: unknown) =>
     unitOfMeasurement === '°C' || unitOfMeasurement === fahrenheitUnit;
