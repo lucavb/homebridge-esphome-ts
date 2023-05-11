@@ -3,7 +3,12 @@ import { Characteristic, Service } from '../index';
 import { SensorComponent } from 'esphome-ts';
 import { PlatformAccessory, Service as HAPService } from 'homebridge';
 
-const isTemperatureComponent = (unitOfMeasurement: unknown) => unitOfMeasurement === '°C' || unitOfMeasurement === '°F';
+const fahrenheitUnit = 'ºF';
+
+const isTemperatureComponent = (unitOfMeasurement: unknown) =>
+    unitOfMeasurement === '°C' || unitOfMeasurement === fahrenheitUnit;
+
+const fahrenheitToCelsius = (fahrenheit: number): number => ((fahrenheit - 32) * 5) / 9;
 
 export const sensorHelper = (component: SensorComponent, accessory: PlatformAccessory): boolean => {
     if (isTemperatureComponent(component.unitOfMeasurement)) {
@@ -31,8 +36,17 @@ const defaultSetup = (
     if (!temperatureSensor) {
         temperatureSensor = accessory.addService(new SelectedService(component.name, ''));
     }
+    const valuesAreFahrenheit = component.unitOfMeasurement === fahrenheitUnit;
 
     component.state$
-        .pipe(tap(() => temperatureSensor?.getCharacteristic(SelectedCharacteristic)?.setValue(component.value!)))
+        .pipe(
+            tap(() => {
+                const celsiusValue =
+                    valuesAreFahrenheit && component.value !== undefined
+                        ? fahrenheitToCelsius(component.value)
+                        : component.value;
+                temperatureSensor?.getCharacteristic(SelectedCharacteristic)?.setValue(celsiusValue!);
+            }),
+        )
         .subscribe();
 };
