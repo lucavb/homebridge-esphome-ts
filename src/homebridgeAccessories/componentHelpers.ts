@@ -1,5 +1,6 @@
 import { lightHelper } from './light';
 import { binarySensorHelper } from './binarySensor';
+import { coverHelper } from './cover';
 import { sensorHelper } from './sensor';
 import { switchHelper } from './switch';
 import { PlatformAccessory } from 'homebridge';
@@ -12,4 +13,5 @@ export const componentHelpers = new Map<ComponentType, ComponentHelper>([
     ['binarySensor', binarySensorHelper],
     ['sensor', sensorHelper],
     ['switch', switchHelper],
+    ['cover', coverHelper]
 ]);
