@@ -1,12 +1,13 @@
 {
     "name": "@seiry/homebridge-esphome-ts",
-    "version": "2.0.2",
+    "version": "2.1.0",
     "description": "New plugin for integrating for esphome into homebridge",
     "main": "dist/index.js",
     "types": "dist/index.d.ts",
     "private": false,
     "scripts": {
-        "build": "tsc",
+        "buildtsc": "tsc",
+        "build": "tsup",
         "cbuild": "npm run clean && npm run build",
         "clean": "rm -rf dist",
         "format": "npm run format:eslint && npm run format:prettier",
@@ -15,6 +16,26 @@
         "integration:test": "homebridge -U examples -P .",
         "prepack": "npm run format && npm run cbuild",
         "test": "jest"
+    },
+    "tsup": {
+        "entry": [
+            "src/index.ts"
+
+        ],
+        "treeshake": true,
+        "sourcemap": "inline",
+        "minify": true,
+        "clean": true,
+        "dts": true,
+        "splitting": false,
+        "format": [
+            "cjs",
+            "esm"
+        ],
+        "external": [
+            "react",
+            "homebridge"
+        ]
     },
     "repository": "https://github.com/lucavb/homebridge-esphome-ts",
     "files": [
@@ -53,6 +74,7 @@
         "homebridge": "1.5.0",
         "prettier": "2.7.1",
         "prettier-eslint": "15.0.1",
+        "tsup": "6.7.0",
         "typescript": "4.7.4"
     }
 }
