@@ -1,6 +1,4 @@
-import { tap } from 'rxjs/operators';
 import { Characteristic, Service } from '../index';
-import { SensorComponent } from 'esphome-ts';
 import { PlatformAccessory, Service as HAPService } from 'homebridge';
 
 const fahrenheitUnit = '°F';
@@ -10,13 +8,13 @@ const isTemperatureComponent = (unitOfMeasurement: unknown) =>
 
 const fahrenheitToCelsius = (fahrenheit: number): number => ((fahrenheit - 32) * 5) / 9;
 
-export const sensorHelper = (component: SensorComponent, accessory: PlatformAccessory): boolean => {
-    if (isTemperatureComponent(component.unitOfMeasurement)) {
+export const sensorHelper = (component: any, accessory: PlatformAccessory): boolean => {
+    if (isTemperatureComponent(component.config.unitOfMeasurement)) {
         defaultSetup(component, accessory, Service.TemperatureSensor, Characteristic.CurrentTemperature);
         return true;
     } else if (
-        component.unitOfMeasurement === '%' &&
-        (component.icon === 'mdi:water-percent' || component.deviceClass === 'humidity')
+        component.config.unitOfMeasurement === '%' &&
+        (component.config.icon === 'mdi:water-percent' || component.config.deviceClass === 'humidity')
     ) {
         defaultSetup(component, accessory, Service.HumiditySensor, Characteristic.CurrentRelativeHumidity);
         return true;
@@ -25,7 +23,7 @@ export const sensorHelper = (component: SensorComponent, accessory: PlatformAcce
 };
 
 const defaultSetup = (
-    component: SensorComponent,
+    component: any,
     accessory: PlatformAccessory,
     SelectedService: typeof Service.TemperatureSensor | typeof Service.HumiditySensor,
     SelectedCharacteristic: typeof Characteristic.CurrentTemperature | typeof Characteristic.CurrentRelativeHumidity,
@@ -36,17 +34,11 @@ const defaultSetup = (
     if (!temperatureSensor) {
         temperatureSensor = accessory.addService(new SelectedService(component.name, ''));
     }
-    const valuesAreFahrenheit = component.unitOfMeasurement === fahrenheitUnit;
+    const valuesAreFahrenheit = component.config.unitOfMeasurement === fahrenheitUnit;
 
-    component.state$
-        .pipe(
-            tap(() => {
-                const celsiusValue =
-                    valuesAreFahrenheit && component.value !== undefined
-                        ? fahrenheitToCelsius(component.value)
-                        : component.value;
-                temperatureSensor?.getCharacteristic(SelectedCharacteristic)?.setValue(celsiusValue!);
-            }),
-        )
-        .subscribe();
+    component.on('state', (state: any) => {
+        const celsiusValue =
+            valuesAreFahrenheit && state.state !== undefined ? fahrenheitToCelsius(state.state) : state.state;
+        temperatureSensor?.getCharacteristic(SelectedCharacteristic)?.setValue(celsiusValue!);
+    });
 };

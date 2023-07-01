@@ -2,14 +2,15 @@ import { lightHelper } from './light';
 import { binarySensorHelper } from './binarySensor';
 import { sensorHelper } from './sensor';
 import { switchHelper } from './switch';
+import { climateHelper } from './climate';
 import { PlatformAccessory } from 'homebridge';
-import { ComponentType } from 'esphome-ts';
 
 export type ComponentHelper = (component: any, accessory: PlatformAccessory) => boolean;
 
-export const componentHelpers = new Map<ComponentType, ComponentHelper>([
-    ['light', lightHelper],
-    ['binarySensor', binarySensorHelper],
-    ['sensor', sensorHelper],
-    ['switch', switchHelper],
+export const componentHelpers = new Map<string, ComponentHelper>([
+    ['Light', lightHelper],
+    ['BinarySensor', binarySensorHelper],
+    ['Sensor', sensorHelper],
+    ['Switch', switchHelper],
+    ['Climate', climateHelper],
 ]);

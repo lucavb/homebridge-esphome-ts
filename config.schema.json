@@ -18,10 +18,16 @@
                         "port": {
                             "name": "Port",
                             "type": "number",
-                            "required": false
+                            "required": false,
+                            "default": 6053
                         },
                         "password": {
                             "name": "Password",
+                            "type": "string",
+                            "required": false
+                        },
+                        "encryptionKey": {
+                            "name": "Encyption Key",
                             "type": "string",
                             "required": false
                         }
@@ -58,7 +64,8 @@
                     "items": [
                         "devices[].host",
                         "devices[].port",
-                        "devices[].password"
+                        "devices[].password",
+                        "devices[].encryptionKey"
                     ]
                 }
             ]
