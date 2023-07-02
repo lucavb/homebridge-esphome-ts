@@ -5,7 +5,7 @@ import { componentHelpers } from './homebridgeAccessories/componentHelpers';
 import { Accessory, PLATFORM_NAME, PLUGIN_NAME, UUIDGen } from './index';
 import { writeReadDataToLogFile } from './shared';
 import { discoverDevices } from './discovery';
-const { Client, Discovery, Climate } = require('@2colors/esphome-native-api');
+const { Client, Discovery } = require('@2colors/esphome-native-api');
 
 interface IEsphomeDeviceConfig {
     host: string;
@@ -85,7 +85,18 @@ export class EsphomePlatform implements DynamicPlatformPlugin {
             );
         }
 
-        devices.forEach((deviceConfig) => {
+        const discovery = new Discovery();
+        discovery.on('info', (info: any) =>{
+            let deviceConfig = this.config.devices?.find(({ host }) => host === info.address || host === info.host);
+
+            if(deviceConfig == undefined) return;
+
+            let match: boolean = false;
+            if(deviceConfig.host != info.address 
+                && deviceConfig.host != info.host) {
+                    return;
+                }
+
             const device = new Client({
                 host: deviceConfig.host,
                 port: deviceConfig.port ?? 6053,
@@ -102,55 +113,21 @@ export class EsphomePlatform implements DynamicPlatformPlugin {
                 this.log('Writing the raw data from your ESP Device to /tmp');
                 writeReadDataToLogFile(deviceConfig.host, device);
             }
-
-            // get device info (not required)
-            // device.on('deviceInfo', (deviceInfo: any) => {
-            //     console.log('Device info:', deviceInfo);
-            // });
-
             // get accessories and listen for state changes
 
             device.on('newEntity', (entity: any) => {
                 this.attachAccessory(entity);
             });
 
-            // device.on('newEntity', (entity: any) => {
-            //     // get the name of the class for entity
-            //     tap((e: any) => console.log(e)),
-            //     filter((entity: any) => this.supportedAccessories.has(entity.constructor.name)),
-            //     take(1)
-            //     tap(() => {
-            //         this.log.debug(`Adding accessory ${entity.name} (${entity.constructor.name})`);
-            //     }),
-            //     catchError((err) => {
-            //         if (err.name === 'TimeoutError') {
-            //             this.log.warn(
-            //                 `The device under the host ${deviceConfig.host} could not be reached.`,
-            //             );
-            //         }
-            //         return of(err);
-            //     })
+            match = true;
+            //TODO: log if we are unable to find a device
 
-            // return device.discovery$.pipe(
-            //     filter((value: boolean) => value),
-            //     take(1),
-            //     timeout(10 * 1000),
-            //     // tap(() => this.addAccessories(device)),
-            //     catchError((err) => {
-            //         if (err.name === 'TimeoutError') {
-            //             this.log.warn(
-            //                 `The device under the host ${deviceConfig.host} could not be reached.`,
-            //             );
-            //         }
-            //         return of(err);
-            //     }),
-            // );
+            this.log('Writing the raw data from your ESP Device to /tmp');
 
-            // console.log('New entity:', entity);
-
-            // entity.on('state', (state: ) => console.log('state',state));
-            // });
         });
+        discovery.run();
+
+
     }
 
     private attachAccessory(component: any): void {
@@ -185,7 +162,6 @@ export class EsphomePlatform implements DynamicPlatformPlugin {
             this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
         }
 
-        // this.logIfDebug(device.components);
     }
 
     public configureAccessory(accessory: PlatformAccessory): void {
