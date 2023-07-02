@@ -76,28 +76,35 @@ export const climateHelper = (component: any, accessory: PlatformAccessory): boo
         .on(CharacteristicEventTypes.SET, (state: CharacteristicValue, callback: CharacteristicSetCallback) => {
             targetTemperatureLow = state as number;
 
-            // 2 events will be received, so we need to capture both to set the mode to AUTO
-            if (date.getTime() - temperatureLastChanged < 50) {
-                component.connection.climateCommandService({
-                    key: component.id,
-                    targetTemperatureLow: targetTemperatureLow,
-                    targetTemperatureHigh: targetTemperatureHigh,
-                    targetTemperature: targetTemperatureLow,
-                    mode: Characteristic.TargetHeaterCoolerState.AUTO,
-                });
-            } else {
-                component.connection.climateCommandService({
-                    key: component.id,
-                    targetTemperatureLow: targetTemperatureLow,
-                    targetTemperatureHigh: targetTemperatureLow,
-                    targetTemperature: targetTemperatureLow,
-                    mode: Characteristic.TargetHeaterCoolerState.COOL,
-                });
-            }
-            temperatureLastChanged = date.getTime();
+            setHeatCoolAuto(targetTemperatureLow, ClimateMode.COOL);
 
             callback();
         });
+
+
+    function setHeatCoolAuto(targetTemperature: number, mode: ClimateMode) {
+
+        // 2 events will be received, so we need to capture both to set the mode to AUTO
+        if (date.getTime() - temperatureLastChanged < 50) {
+            component.connection.climateCommandService({
+                key: component.id,
+                targetTemperatureLow: targetTemperatureLow,
+                targetTemperatureHigh: targetTemperatureHigh,
+                targetTemperature: targetTemperature,
+                mode: ClimateMode.AUTO,
+            });
+        } else {
+            component.connection.climateCommandService({
+                key: component.id,
+                targetTemperatureLow: targetTemperature,
+                targetTemperatureHigh: targetTemperature,
+                targetTemperature: targetTemperature,
+                mode: mode,
+            });
+        }
+        temperatureLastChanged = date.getTime();
+    }
+        
 
     service
         .getCharacteristic(Characteristic.HeatingThresholdTemperature)
@@ -110,25 +117,7 @@ export const climateHelper = (component: any, accessory: PlatformAccessory): boo
         .on(CharacteristicEventTypes.SET, (state: CharacteristicValue, callback: CharacteristicSetCallback) => {
             targetTemperatureHigh = state as number;
 
-            // 2 events will be received, so we need to capture both to set the mode to AUTO
-            if (date.getTime() - temperatureLastChanged < 50) {
-                component.connection.climateCommandService({
-                    key: component.id,
-                    targetTemperatureLow: targetTemperatureLow,
-                    targetTemperatureHigh: targetTemperatureHigh,
-                    targetTemperature: targetTemperatureLow,
-                    mode: Characteristic.TargetHeaterCoolerState.AUTO,
-                });
-            } else {
-                component.connection.climateCommandService({
-                    key: component.id,
-                    targetTemperatureLow: targetTemperatureHigh,
-                    targetTemperatureHigh: targetTemperatureHigh,
-                    targetTemperature: targetTemperatureHigh,
-                    mode: Characteristic.TargetHeaterCoolerState.HEAT,
-                });
-            }
-            temperatureLastChanged = date.getTime();
+            setHeatCoolAuto(targetTemperatureHigh, ClimateMode.HEAT);
 
             callback();
         });
@@ -137,9 +126,9 @@ export const climateHelper = (component: any, accessory: PlatformAccessory): boo
         ?.getCharacteristic(Characteristic.Active)
         .on(CharacteristicEventTypes.SET, (state: CharacteristicValue, callback: CharacteristicSetCallback) => {
             // set back to the previous state if turned on, or default to AUTO if we have no known previous state
-            const mode = (state as number) === 1 ? previousModeState : 0;
-            if ((state as number) === 1 && mode === 0) {
-                state = Characteristic.TargetHeaterCoolerState.AUTO;
+            const mode = (state as number) === 1 ? previousModeState : ClimateMode.OFF;
+            if ((state as number) === 1 && mode === ClimateMode.OFF) {
+                state = ClimateMode.AUTO;
             }
 
             component.connection.climateCommandService({
@@ -268,3 +257,4 @@ export const climateHelper = (component: any, accessory: PlatformAccessory): boo
 
     return true;
 };
+
