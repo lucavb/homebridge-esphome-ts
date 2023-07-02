@@ -83,25 +83,26 @@ export const climateHelper = (component: any, accessory: PlatformAccessory): boo
 
 
     function setHeatCoolAuto(targetTemperature: number, mode: ClimateMode) {
-
+        let state: any;
         // 2 events will be received, so we need to capture both to set the mode to AUTO
         if (date.getTime() - temperatureLastChanged < 50) {
-            component.connection.climateCommandService({
+            state = {
                 key: component.id,
                 targetTemperatureLow: targetTemperatureLow,
                 targetTemperatureHigh: targetTemperatureHigh,
                 targetTemperature: targetTemperature,
                 mode: ClimateMode.AUTO,
-            });
+            };
         } else {
-            component.connection.climateCommandService({
+            state = {
                 key: component.id,
                 targetTemperatureLow: targetTemperature,
                 targetTemperatureHigh: targetTemperature,
                 targetTemperature: targetTemperature,
                 mode: mode,
-            });
+            };
         }
+        component.connection.climateCommandService(state);
         temperatureLastChanged = date.getTime();
     }
         
@@ -126,9 +127,9 @@ export const climateHelper = (component: any, accessory: PlatformAccessory): boo
         ?.getCharacteristic(Characteristic.Active)
         .on(CharacteristicEventTypes.SET, (state: CharacteristicValue, callback: CharacteristicSetCallback) => {
             // set back to the previous state if turned on, or default to AUTO if we have no known previous state
-            const mode = (state as number) === 1 ? previousModeState : ClimateMode.OFF;
+            let mode = (state as number) === 1 ? previousModeState : ClimateMode.OFF;
             if ((state as number) === 1 && mode === ClimateMode.OFF) {
-                state = ClimateMode.AUTO;
+                mode = ClimateMode.AUTO;
             }
 
             component.connection.climateCommandService({
@@ -227,7 +228,6 @@ export const climateHelper = (component: any, accessory: PlatformAccessory): boo
         // preserve the previous mode state so that it can be used to turn back on.
         if ((state.mode as ClimateMode) !== ClimateMode.OFF) {
             previousModeState = state.mode;
-        }
 
         service?.getCharacteristic(Characteristic.Active)?.updateValue(state.mode !== 0);
 
