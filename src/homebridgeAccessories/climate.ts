@@ -228,7 +228,8 @@ export const climateHelper = (component: any, accessory: PlatformAccessory): boo
         // preserve the previous mode state so that it can be used to turn back on.
         if ((state.mode as ClimateMode) !== ClimateMode.OFF) {
             previousModeState = state.mode;
-
+        }
+        
         service?.getCharacteristic(Characteristic.Active)?.updateValue(state.mode !== 0);
 
         if (component.config.supportsCurrentTemperature) {
