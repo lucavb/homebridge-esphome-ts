@@ -20,10 +20,7 @@ enum ClimateFanState {
     QUIET = 9,
 }
 
-
-
 export class ClimateState {
-
     private date: Date = new Date();
     private temperatureLastChanged: number = this.date.getTime();
 
@@ -50,10 +47,11 @@ export class ClimateState {
         this.key = key;
     }
 
-    public UpdateEsp(){
-        if(!this.changesMade) {
+    public updateEsp() {
+        if (!this.changesMade) {
             return;
         }
+        this.changesMade = false; // stop the spam
 
         this.connection.climateCommandService({
             key: this.key,
@@ -61,10 +59,11 @@ export class ClimateState {
             fanMode: this.FanMode,
             mode: this.ClimateMode, // Heater/Cooler ClimateMode
             targetTemperature: this.TargetTemperature,
-            targetTemperatureLow: this.ClimateMode === ClimateMode.AUTO ? this.targetTemperatureLow : this.TargetTemperature,
-            targetTemperatureHigh: this.ClimateMode === ClimateMode.AUTO ? this.targetTemperatureHigh : this.TargetTemperature,
+            targetTemperatureLow:
+                this.ClimateMode === ClimateMode.AUTO ? this.targetTemperatureLow : this.TargetTemperature,
+            targetTemperatureHigh:
+                this.ClimateMode === ClimateMode.AUTO ? this.targetTemperatureHigh : this.TargetTemperature,
         });
-
     }
 
     public get active(): boolean {
@@ -72,12 +71,12 @@ export class ClimateState {
     }
     public set active(value: boolean) {
         let mode = value ? this.ClimateMode : ClimateMode.OFF;
-        if(value && mode === ClimateMode.OFF) {
+        if (value && mode === ClimateMode.OFF) {
             mode = ClimateMode.AUTO;
         }
 
         this.ClimateMode = mode;
-        if(this.Active !== value){
+        if (this.Active !== value) {
             this.changesMade = true;
         }
         this.Active = value;
@@ -89,7 +88,7 @@ export class ClimateState {
     public set fanMode(value: ClimateFanState) {
         // this.previousClimateState = Object.assign({}, this);
 
-        if(this.FanMode !== value){
+        if (this.FanMode !== value) {
             this.changesMade = true;
         }
         this.FanMode = value;
@@ -98,7 +97,7 @@ export class ClimateState {
         return this.ClimateMode;
     }
     public set climateMode(value: ClimateMode) {
-        if(this.ClimateMode !== value){
+        if (this.ClimateMode !== value) {
             this.changesMade = true;
         }
         this.ClimateMode = value;
@@ -108,7 +107,7 @@ export class ClimateState {
         return this.SwingMode;
     }
     public set swingMode(value: number) {
-        if(this.SwingMode !== value){
+        if (this.SwingMode !== value) {
             this.changesMade = true;
         }
         this.SwingMode = value;
@@ -118,7 +117,7 @@ export class ClimateState {
         return this.TargetTemperature;
     }
     public set targetTemperature(value: number) {
-        if(this.targetTemperature !== value){
+        if (this.targetTemperature !== value) {
             this.changesMade = true;
         }
 
@@ -135,7 +134,7 @@ export class ClimateState {
         return this.TargetTemperatureLow;
     }
     public set targetTemperatureLow(value: number) {
-        if(this.targetTemperatureLow !== value){
+        if (this.targetTemperatureLow !== value) {
             this.changesMade = true;
         }
 
@@ -145,9 +144,9 @@ export class ClimateState {
     public get targetTemperatureHigh(): number {
         return this.TargetTemperatureHigh;
     }
-    
+
     public set targetTemperatureHigh(value: number) {
-        if(this.targetTemperatureHigh !== value){
+        if (this.targetTemperatureHigh !== value) {
             this.changesMade = true;
         }
 
@@ -155,11 +154,10 @@ export class ClimateState {
         this.TargetTemperatureHigh = value;
     }
 
-    
-    private getClimateMode(mode: ClimateMode) : ClimateMode {
+    private getClimateMode(mode: ClimateMode): ClimateMode {
         let state: any;
         // 2 events will be received, so we need to capture both to set the mode to AUTO
-        if ( Math.abs(this.date.getTime() - this.temperatureLastChanged) < 50) {
+        if (Math.abs(this.date.getTime() - this.temperatureLastChanged) < 50) {
             return ClimateMode.AUTO;
         } else {
             return mode;
