@@ -73,15 +73,16 @@ export class ClimateState {
         return this.Active;
     }
     public set active(value: boolean) {
+        console.log("active setter called");
         let mode = value ? this.ClimateMode : ClimateMode.OFF;
-        if (value && mode === ClimateMode.OFF) {
+        if (value && (mode === undefined || mode === ClimateMode.OFF)) {
             mode = ClimateMode.AUTO;
         }
 
-        this.ClimateMode = mode;
         if (this.Active !== value) {
             this.changesMade = true;
         }
+        this.ClimateMode = mode;
         this.Active = value;
     }
 
