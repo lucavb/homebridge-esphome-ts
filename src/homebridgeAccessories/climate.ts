@@ -117,9 +117,9 @@ export const climateHelper = (component: any, accessory: PlatformAccessory): boo
             .setProps({
                 unit: null,
                 format: Formats.UINT8,
-                maxValue: Math.max(...targetHeaterCoolerStateList),
-                minValue: Math.min(...targetHeaterCoolerStateList),
-                validValues: targetHeaterCoolerStateList,
+                // maxValue: Math.max(...targetHeaterCoolerStateList),
+                // minValue: Math.min(...targetHeaterCoolerStateList),
+                // validValues: targetHeaterCoolerStateList,
             })
             .on(CharacteristicEventTypes.SET, (state: CharacteristicValue, callback: CharacteristicSetCallback) => {
                 console.log('CurrentHeaterCoolerState', state);
