@@ -48,12 +48,7 @@ export const climateHelper = (component: any, accessory: PlatformAccessory): boo
     if (!service) {
         return false;
     }
-    const date = new Date();
 
-    const previousModeState: ClimateMode = 0;
-    const targetTemperatureLow: number = 0;
-    const targetTemperatureHigh: number = 0;
-    const temperatureLastChanged: number = date.getTime();
     const supportedModesList = component.config.supportedModesList as number[];
     const supportedFanModesList = component.config.supportedFanModesList as number[];
     const supportedSwingModesList = component.config.supportedSwingModesList as number[];
@@ -116,6 +111,7 @@ export const climateHelper = (component: any, accessory: PlatformAccessory): boo
             })
             .on(CharacteristicEventTypes.SET, (state: CharacteristicValue, callback: CharacteristicSetCallback) => {
                 if (typeof state === 'number') {
+                    console.log('set', state, reverseMapHeaterCoolerState(state));
                     climateState.climateMode = reverseMapHeaterCoolerState(state);
                     setTimeout(() => {
                         climateState.updateEsp();
