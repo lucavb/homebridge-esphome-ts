@@ -64,10 +64,12 @@ export const climateHelper = (component: any, accessory: PlatformAccessory): boo
             minStep: 1,
         })
         .on(CharacteristicEventTypes.SET, (state: CharacteristicValue, callback: CharacteristicSetCallback) => {
+            console.log('CoolingThresholdTemperature', state);
             climateState.targetTemperatureLow = state as number;
             setTimeout(() => {
                 climateState.updateEsp();
             }, 100);
+            callback();
         });
 
     service
@@ -79,16 +81,22 @@ export const climateHelper = (component: any, accessory: PlatformAccessory): boo
             minStep: 1,
         })
         .on(CharacteristicEventTypes.SET, (state: CharacteristicValue, callback: CharacteristicSetCallback) => {
+            console.log('HeatingThresholdTemperature', state);
             climateState.targetTemperatureHigh = state as number;
             setTimeout(() => {
                 climateState.updateEsp();
             }, 100);
+            callback();
         });
 
     service
         ?.getCharacteristic(Characteristic.Active)
         .on(CharacteristicEventTypes.SET, (state: CharacteristicValue, callback: CharacteristicSetCallback) => {
+            console.log('Active', state);
             climateState.active = (state as number) === 1;
+            setTimeout(() => {
+                climateState.updateEsp();
+            }, 100);
             callback();
         });
 
@@ -99,6 +107,7 @@ export const climateHelper = (component: any, accessory: PlatformAccessory): boo
             targetHeaterCoolerStateList.push(mapHeaterCoolerState(i));
         });
 
+        console.debug("CurrentHeaterCoolerState");
         service
             .getCharacteristic(Characteristic.CurrentHeaterCoolerState)
             .setValue(Math.min(...targetHeaterCoolerStateList))
