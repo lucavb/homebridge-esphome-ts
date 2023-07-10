@@ -28,6 +28,7 @@ export class ClimateState {
     private FanMode: ClimateFanState = ClimateFanState.OFF;
     private ClimateMode: ClimateMode = ClimateMode.OFF;
     private SwingMode: number = 0; // RotationDirection
+    private SupportTwoPointTargetTemperature: boolean = false;
 
     private key: string = '';
 
@@ -59,13 +60,23 @@ export class ClimateState {
             fanMode: this.FanMode,
             mode: this.ClimateMode, // Heater/Cooler ClimateMode
             targetTemperature: this.TargetTemperature,
-            targetTemperatureLow:
-                this.ClimateMode === ClimateMode.AUTO ? this.targetTemperatureLow : this.TargetTemperature,
-            targetTemperatureHigh:
-                this.ClimateMode === ClimateMode.AUTO ? this.targetTemperatureHigh : this.TargetTemperature,
         };
-        console.log('updateEsp', state);
 
+        if(this.SupportTwoPointTargetTemperature){
+            let state = {
+                key: this.key,
+                swingMode: this.SwingMode,
+                fanMode: this.FanMode,
+                mode: this.ClimateMode, // Heater/Cooler ClimateMode
+                targetTemperature: this.TargetTemperature,
+                targetTemperatureLow: this.ClimateMode === ClimateMode.AUTO ? this.targetTemperatureLow : this.TargetTemperature,
+                targetTemperatureHigh: this.ClimateMode === ClimateMode.AUTO ? this.targetTemperatureHigh : this.TargetTemperature,
+        
+            }
+            this.connection.climateCommandService(state);
+            return;
+        }
+        
         this.connection.climateCommandService(state);
     }
 
@@ -73,7 +84,6 @@ export class ClimateState {
         return this.Active;
     }
     public set active(value: boolean) {
-        console.log("active setter called");
         let mode = value ? this.ClimateMode : ClimateMode.OFF;
         if (value && (mode === undefined || mode === ClimateMode.OFF)) {
             mode = ClimateMode.AUTO;
@@ -156,6 +166,13 @@ export class ClimateState {
 
         this.ClimateMode = this.getClimateMode(ClimateMode.HEAT);
         this.TargetTemperatureHigh = value;
+    }
+
+    public get supportTwoPointTargetTemperature(): boolean {
+        return this.SupportTwoPointTargetTemperature;
+    }
+    public set supportTwoPointTargetTemperature(value: boolean) {
+        this.SupportTwoPointTargetTemperature = value;
     }
 
     private getClimateMode(mode: ClimateMode): ClimateMode {
