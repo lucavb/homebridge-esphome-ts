@@ -53,7 +53,7 @@ export class ClimateState {
         }
         this.changesMade = false; // stop the spam
 
-        this.connection.climateCommandService({
+        let state = {
             key: this.key,
             swingMode: this.SwingMode,
             fanMode: this.FanMode,
@@ -63,7 +63,10 @@ export class ClimateState {
                 this.ClimateMode === ClimateMode.AUTO ? this.targetTemperatureLow : this.TargetTemperature,
             targetTemperatureHigh:
                 this.ClimateMode === ClimateMode.AUTO ? this.targetTemperatureHigh : this.TargetTemperature,
-        });
+        };
+        console.log('updateEsp', state);
+
+        this.connection.climateCommandService(state);
     }
 
     public get active(): boolean {
