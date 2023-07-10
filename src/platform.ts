@@ -59,43 +59,43 @@ export class EsphomePlatform implements DynamicPlatformPlugin {
     }
 
     protected onHomebridgeDidFinishLaunching(): void {
-        let devices: Observable<IEsphomeDeviceConfig> = from(this.config.devices ?? []);
-        if (this.config.discover) {
-            const excludeConfigDevices: Set<string> = new Set();
-            devices = concat(
-                discoverDevices(this.config.discoveryTimeout ?? DEFAULT_DISCOVERY_TIMEOUT, this.log).pipe(
-                    map((discoveredDevice) => {
-                        const configDevice = this.config.devices?.find(({ host }) => host === discoveredDevice.host);
-                        let deviceConfig = discoveredDevice;
-                        if (configDevice) {
-                            excludeConfigDevices.add(configDevice.host);
-                            deviceConfig = { ...discoveredDevice, ...configDevice };
-                        }
+        const devices: Observable<IEsphomeDeviceConfig> = from(this.config.devices ?? []);
+        // TODO: Reimplement discovery
+        // if (this.config.discover) {
+        //     const excludeConfigDevices: Set<string> = new Set();
+        //     devices = concat(
+        //         discoverDevices(this.config.discoveryTimeout ?? DEFAULT_DISCOVERY_TIMEOUT, this.log).pipe(
+        //             map((discoveredDevice) => {
+        //                 const configDevice = this.config.devices?.find(({ host }) => host === discoveredDevice.host);
+        //                 let deviceConfig = discoveredDevice;
+        //                 if (configDevice) {
+        //                     excludeConfigDevices.add(configDevice.host);
+        //                     deviceConfig = { ...discoveredDevice, ...configDevice };
+        //                 }
 
-                        return {
-                            ...deviceConfig,
-                            // Override hostname with ip address when available
-                            // to avoid issues with mDNS resolution at OS level
-                            host: discoveredDevice.address ?? discoveredDevice.host,
-                        };
-                    }),
-                ),
-                // Feed into output remaining devices from config that haven't been discovered
-                devices.pipe(filter(({ host }) => !excludeConfigDevices.has(host))),
-            );
-        }
+        //                 return {
+        //                     ...deviceConfig,
+        //                     // Override hostname with ip address when available
+        //                     // to avoid issues with mDNS resolution at OS level
+        //                     host: discoveredDevice.address ?? discoveredDevice.host,
+        //                 };
+        //             }),
+        //         ),
+        //         // Feed into output remaining devices from config that haven't been discovered
+        //         devices.pipe(filter(({ host }) => !excludeConfigDevices.has(host))),
+        //     );
+        // }
 
         const discovery = new Discovery();
-        discovery.on('info', (info: any) =>{
-            let deviceConfig = this.config.devices?.find(({ host }) => host === info.address || host === info.host);
+        discovery.on('info', (info: any) => {
+            const deviceConfig = this.config.devices?.find(({ host }) => host === info.address || host === info.host);
 
-            if(deviceConfig == undefined) return;
+            if (deviceConfig == undefined) return;
 
             let match: boolean = false;
-            if(deviceConfig.host != info.address 
-                && deviceConfig.host != info.host) {
-                    return;
-                }
+            if (deviceConfig.host != info.address && deviceConfig.host != info.host) {
+                return;
+            }
 
             const device = new Client({
                 host: deviceConfig.host,
@@ -120,14 +120,11 @@ export class EsphomePlatform implements DynamicPlatformPlugin {
             });
 
             match = true;
-            //TODO: log if we are unable to find a device
+            // TODO: log if we are unable to find a device
 
             this.log('Writing the raw data from your ESP Device to /tmp');
-
         });
         discovery.run();
-
-
     }
 
     private attachAccessory(component: any): void {
@@ -161,7 +158,6 @@ export class EsphomePlatform implements DynamicPlatformPlugin {
             this.accessories.push(accessory);
             this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
         }
-
     }
 
     public configureAccessory(accessory: PlatformAccessory): void {
