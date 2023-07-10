@@ -19,7 +19,7 @@ function mapHeaterCoolerState(i: ClimateMode) {
             return Characteristic.TargetHeaterCoolerState.HEAT;
         case ClimateMode.OFF:
         default:
-            return 0;
+            return -1;
     }
 }
 
@@ -31,9 +31,9 @@ function reverseMapHeaterCoolerState(i: number) {
             return ClimateMode.COOL;
         case Characteristic.TargetHeaterCoolerState.HEAT:
             return ClimateMode.HEAT;
-        case ClimateMode.OFF:
+        case 0:
         default:
-            return 0;
+            return ClimateMode.OFF;
     }
 }
 
@@ -56,9 +56,6 @@ export const climateHelper = (component: any, accessory: PlatformAccessory): boo
     const climateState: ClimateState = new ClimateState(component.connection, component.id);
 
     climateState.supportTwoPointTargetTemperature = component.config.supportsTwoPointTargetTemperature;
-
-
-    console.log("supportedModesList", supportedModesList);
 
     service
         .getCharacteristic(Characteristic.CoolingThresholdTemperature)
@@ -110,7 +107,7 @@ export const climateHelper = (component: any, accessory: PlatformAccessory): boo
         const targetHeaterCoolerStateList: number[] = [];
         supportedModesList.forEach(function (i) {
             var mapped = mapHeaterCoolerState(i);
-            if(mapped != 0) targetHeaterCoolerStateList.push(mapped);
+            if(mapped != -1) targetHeaterCoolerStateList.push(mapped);
         });
 
         console.debug("CurrentHeaterCoolerState", targetHeaterCoolerStateList);
