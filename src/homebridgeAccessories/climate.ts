@@ -59,8 +59,8 @@ export const climateHelper = (component: any, accessory: PlatformAccessory): boo
         .getCharacteristic(Characteristic.CoolingThresholdTemperature)
         .setValue(component.config.visualMinTemperature)
         .setProps({
-            // minValue: component.config.visualMinTemperature,
-            // maxValue: component.config.visualMaxTemperature,
+            minValue: component.config.visualMinTemperature,
+            maxValue: component.config.visualMaxTemperature,
             minStep: 1,
         })
         .on(CharacteristicEventTypes.SET, (state: CharacteristicValue, callback: CharacteristicSetCallback) => {
@@ -74,8 +74,8 @@ export const climateHelper = (component: any, accessory: PlatformAccessory): boo
         .getCharacteristic(Characteristic.HeatingThresholdTemperature)
         .setValue(component.config.visualMinTemperature)
         .setProps({
-            // minValue: component.config.visualMinTemperature,
-            // maxValue: component.config.visualMaxTemperature,
+            minValue: component.config.visualMinTemperature,
+            maxValue: component.config.visualMaxTemperature,
             minStep: 1,
         })
         .on(CharacteristicEventTypes.SET, (state: CharacteristicValue, callback: CharacteristicSetCallback) => {
@@ -110,6 +110,7 @@ export const climateHelper = (component: any, accessory: PlatformAccessory): boo
                 validValues: targetHeaterCoolerStateList,
             })
             .on(CharacteristicEventTypes.SET, (state: CharacteristicValue, callback: CharacteristicSetCallback) => {
+                console.log('CurrentHeaterCoolerState', state);
                 if (typeof state === 'number') {
                     console.log('set', state, reverseMapHeaterCoolerState(state));
                     climateState.climateMode = reverseMapHeaterCoolerState(state);
@@ -133,6 +134,7 @@ export const climateHelper = (component: any, accessory: PlatformAccessory): boo
                 validValues: supportedFanModesList,
             })
             .on(CharacteristicEventTypes.SET, (state: CharacteristicValue, callback: CharacteristicSetCallback) => {
+                console.log('CurrentFanState', state);
                 if (typeof state === 'number') {
                     climateState.fanMode = state;
                     setTimeout(() => {
@@ -156,6 +158,7 @@ export const climateHelper = (component: any, accessory: PlatformAccessory): boo
                 validValues: supportedSwingModesList,
             })
             .on(CharacteristicEventTypes.SET, (state: CharacteristicValue, callback: CharacteristicSetCallback) => {
+                console.log('RotationDirection', state);
                 if (typeof state === 'number') {
                     climateState.swingMode = state;
                     setTimeout(() => {
@@ -169,6 +172,7 @@ export const climateHelper = (component: any, accessory: PlatformAccessory): boo
     service
         .getCharacteristic(Characteristic.TargetTemperature)
         .on(CharacteristicEventTypes.SET, (state: CharacteristicValue, callback: CharacteristicSetCallback) => {
+            console.log('TargetTemperature', state);
             if (typeof state === 'number') {
                 climateState.targetTemperature = state;
                 setTimeout(() => {
