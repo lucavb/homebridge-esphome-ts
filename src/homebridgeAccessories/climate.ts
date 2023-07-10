@@ -55,6 +55,11 @@ export const climateHelper = (component: any, accessory: PlatformAccessory): boo
 
     const climateState: ClimateState = new ClimateState(component.connection, component.id);
 
+    climateState.supportTwoPointTargetTemperature = component.config.supportsTwoPointTargetTemperature;
+
+
+    console.log("supportedModesList", supportedModesList);
+
     service
         .getCharacteristic(Characteristic.CoolingThresholdTemperature)
         .setValue(component.config.visualMinTemperature)
@@ -104,10 +109,11 @@ export const climateHelper = (component: any, accessory: PlatformAccessory): boo
     if (supportedModesList.length > 0) {
         const targetHeaterCoolerStateList: number[] = [];
         supportedModesList.forEach(function (i) {
-            targetHeaterCoolerStateList.push(mapHeaterCoolerState(i));
+            var mapped = mapHeaterCoolerState(i);
+            if(mapped != 0) targetHeaterCoolerStateList.push(mapped);
         });
 
-        console.debug("CurrentHeaterCoolerState");
+        console.debug("CurrentHeaterCoolerState", targetHeaterCoolerStateList);
         service
             .getCharacteristic(Characteristic.CurrentHeaterCoolerState)
             .setValue(Math.min(...targetHeaterCoolerStateList))
