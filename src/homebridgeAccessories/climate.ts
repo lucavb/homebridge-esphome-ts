@@ -18,8 +18,25 @@ function mapHeaterCoolerState(i: ClimateMode) {
         case ClimateMode.HEAT:
             return Characteristic.TargetHeaterCoolerState.HEAT;
         case ClimateMode.OFF:
+            return 0;
+        case ClimateMode.FAN_ONLY:
+        case ClimateMode.DRY:
         default:
             return -1;
+    }
+}
+
+function currentHeaterCoolerState(i: number) {
+    switch (i) {
+        case Characteristic.TargetHeaterCoolerState.AUTO:
+            return Characteristic.CurrentHeaterCoolerState.HEATING;
+        case Characteristic.TargetHeaterCoolerState.COOL:
+            return Characteristic.CurrentHeaterCoolerState.COOLING;
+        case Characteristic.TargetHeaterCoolerState.HEAT:
+            return Characteristic.CurrentHeaterCoolerState.HEATING;
+        case 0:
+        default:
+            return Characteristic.CurrentHeaterCoolerState.INACTIVE;
     }
 }
 
@@ -37,6 +54,7 @@ function reverseMapHeaterCoolerState(i: number) {
     }
 }
 
+
 export const climateHelper = (component: any, accessory: PlatformAccessory): boolean => {
     let service: HAPService | undefined = accessory.services.find(
         (service: HAPService) => service.UUID === Service.HeaterCooler.UUID,
@@ -49,6 +67,15 @@ export const climateHelper = (component: any, accessory: PlatformAccessory): boo
         return false;
     }
 
+    
+    // function logIfDebug(msg?: any, ...parameters: unknown[]): void {
+    //     if (debug) {
+    //         log(msg, parameters);
+    //     } else {
+    //         log.debug(msg, parameters);
+    //     }
+    // }
+
     const supportedModesList = component.config.supportedModesList as number[];
     const supportedFanModesList = component.config.supportedFanModesList as number[];
     const supportedSwingModesList = component.config.supportedSwingModesList as number[];
@@ -59,46 +86,48 @@ export const climateHelper = (component: any, accessory: PlatformAccessory): boo
 
     service
         .getCharacteristic(Characteristic.CoolingThresholdTemperature)
-        .setValue(component.config.visualMinTemperature)
         .setProps({
             minValue: component.config.visualMinTemperature,
             maxValue: component.config.visualMaxTemperature,
             minStep: 1,
         })
         .on(CharacteristicEventTypes.SET, (state: CharacteristicValue, callback: CharacteristicSetCallback) => {
-            console.log('CoolingThresholdTemperature', state);
-            climateState.targetTemperatureLow = state as number;
-            setTimeout(() => {
-                climateState.updateEsp();
-            }, 100);
-            callback();
+            // logIfDebug('CoolingThresholdTemperature', state);
+            const temperature = state as number;
+
+            if(climateState.supportTwoPointTargetTemperature){
+                climateState.targetTemperatureLow = temperature;
+            }else{
+                climateState.targetTemperature = temperature;
+            }
+            climateState.updateEsp();
         });
 
     service
         .getCharacteristic(Characteristic.HeatingThresholdTemperature)
-        .setValue(component.config.visualMinTemperature)
         .setProps({
             minValue: component.config.visualMinTemperature,
             maxValue: component.config.visualMaxTemperature,
             minStep: 1,
         })
         .on(CharacteristicEventTypes.SET, (state: CharacteristicValue, callback: CharacteristicSetCallback) => {
-            console.log('HeatingThresholdTemperature', state);
-            climateState.targetTemperatureHigh = state as number;
-            setTimeout(() => {
-                climateState.updateEsp();
-            }, 100);
-            callback();
+            // logIfDebug('HeatingThresholdTemperature', state);
+            const temperature = state as number;
+
+            if(climateState.supportTwoPointTargetTemperature){
+                climateState.targetTemperatureHigh = temperature;
+            }else{
+                climateState.targetTemperature = temperature;
+            }
+            climateState.updateEsp();
         });
 
     service
         ?.getCharacteristic(Characteristic.Active)
         .on(CharacteristicEventTypes.SET, (state: CharacteristicValue, callback: CharacteristicSetCallback) => {
-            console.log('Active', state);
+            // logIfDebug('Active', state);
             climateState.active = (state as number) === 1;
-            setTimeout(() => {
-                climateState.updateEsp();
-            }, 100);
+            climateState.updateEsp();
             callback();
         });
 
@@ -106,29 +135,26 @@ export const climateHelper = (component: any, accessory: PlatformAccessory): boo
     if (supportedModesList.length > 0) {
         const targetHeaterCoolerStateList: number[] = [];
         supportedModesList.forEach(function (i) {
-            var mapped = mapHeaterCoolerState(i);
-            if(mapped != -1) targetHeaterCoolerStateList.push(mapped);
+            const mapped = mapHeaterCoolerState(i);
+            if (mapped !== -1 && targetHeaterCoolerStateList.indexOf(mapped) === -1) {
+                targetHeaterCoolerStateList.push(mapped);
+            }
         });
 
-        console.debug("CurrentHeaterCoolerState", targetHeaterCoolerStateList);
         service
-            .getCharacteristic(Characteristic.CurrentHeaterCoolerState)
-            .setValue(Math.min(...targetHeaterCoolerStateList))
+            .getCharacteristic(Characteristic.TargetHeaterCoolerState)
             .setProps({
                 unit: null,
                 format: Formats.UINT8,
-                // maxValue: Math.max(...targetHeaterCoolerStateList),
-                // minValue: Math.min(...targetHeaterCoolerStateList),
-                // validValues: targetHeaterCoolerStateList,
+                maxValue: Math.max(...targetHeaterCoolerStateList),
+                minValue: Math.min(...targetHeaterCoolerStateList),
+                validValues: targetHeaterCoolerStateList,
             })
             .on(CharacteristicEventTypes.SET, (state: CharacteristicValue, callback: CharacteristicSetCallback) => {
-                console.log('CurrentHeaterCoolerState', state);
+                // logIfDebug('TargetHeaterCoolerState', state);
                 if (typeof state === 'number') {
-                    console.log('set', state, reverseMapHeaterCoolerState(state));
                     climateState.climateMode = reverseMapHeaterCoolerState(state);
-                    setTimeout(() => {
-                        climateState.updateEsp();
-                    }, 100);
+                    climateState.updateEsp();
                 }
                 callback();
             });
@@ -137,7 +163,6 @@ export const climateHelper = (component: any, accessory: PlatformAccessory): boo
     if (supportedFanModesList.length > 0) {
         service
             .getCharacteristic(Characteristic.CurrentFanState)
-            .setValue(Math.min(...supportedFanModesList))
             .setProps({
                 unit: null,
                 format: Formats.UINT8,
@@ -146,12 +171,10 @@ export const climateHelper = (component: any, accessory: PlatformAccessory): boo
                 validValues: supportedFanModesList,
             })
             .on(CharacteristicEventTypes.SET, (state: CharacteristicValue, callback: CharacteristicSetCallback) => {
-                console.log('CurrentFanState', state);
+                // logIfDebug('CurrentFanState', state);
                 if (typeof state === 'number') {
                     climateState.fanMode = state;
-                    setTimeout(() => {
-                        climateState.updateEsp();
-                    }, 100);
+                    climateState.updateEsp();
                 }
                 callback();
             });
@@ -161,7 +184,6 @@ export const climateHelper = (component: any, accessory: PlatformAccessory): boo
     if (supportedSwingModesList.length > 0) {
         service
             .getCharacteristic(Characteristic.RotationDirection)
-            .setValue(Math.min(...supportedSwingModesList))
             .setProps({
                 unit: null,
                 format: Formats.UINT8,
@@ -170,12 +192,10 @@ export const climateHelper = (component: any, accessory: PlatformAccessory): boo
                 validValues: supportedSwingModesList,
             })
             .on(CharacteristicEventTypes.SET, (state: CharacteristicValue, callback: CharacteristicSetCallback) => {
-                console.log('RotationDirection', state);
+                // logIfDebug('RotationDirection', state);
                 if (typeof state === 'number') {
                     climateState.swingMode = state;
-                    setTimeout(() => {
-                        climateState.updateEsp();
-                    }, 100);
+                    climateState.updateEsp();
                 }
                 callback();
             });
@@ -184,12 +204,10 @@ export const climateHelper = (component: any, accessory: PlatformAccessory): boo
     service
         .getCharacteristic(Characteristic.TargetTemperature)
         .on(CharacteristicEventTypes.SET, (state: CharacteristicValue, callback: CharacteristicSetCallback) => {
-            console.log('TargetTemperature', state);
+            // logIfDebug('TargetTemperature', state);
             if (typeof state === 'number') {
                 climateState.targetTemperature = state;
-                setTimeout(() => {
-                    climateState.updateEsp();
-                }, 100);
+                climateState.updateEsp();
             }
             callback();
         });
@@ -200,7 +218,7 @@ export const climateHelper = (component: any, accessory: PlatformAccessory): boo
         climateState.targetTemperatureLow = state.targetTemperatureLow;
         climateState.targetTemperatureHigh = state.targetTemperatureHigh;
         climateState.climateMode = state.mode;
-
+        
         service?.getCharacteristic(Characteristic.Active)?.updateValue(climateState.active);
 
         if (component.config.supportsCurrentTemperature) {
@@ -208,18 +226,21 @@ export const climateHelper = (component: any, accessory: PlatformAccessory): boo
             service?.getCharacteristic(Characteristic.CurrentTemperature)?.updateValue(climateState.currentTemperature);
         }
         service?.getCharacteristic(Characteristic.TargetTemperature)?.updateValue(climateState.targetTemperature);
-        service
-            ?.getCharacteristic(Characteristic.CoolingThresholdTemperature)
-            ?.updateValue(climateState.targetTemperatureLow);
-        service
-            ?.getCharacteristic(Characteristic.HeatingThresholdTemperature)
-            ?.updateValue(climateState.targetTemperatureHigh);
+
+        const targetTemperatureLow = climateState.supportTwoPointTargetTemperature ? climateState.targetTemperatureLow : climateState.targetTemperature;
+        const targetTemperatureHigh = climateState.supportTwoPointTargetTemperature ? climateState.targetTemperatureHigh : climateState.targetTemperature;
+        console.log('climateState', climateState);
+        
+        service?.getCharacteristic(Characteristic.CoolingThresholdTemperature)?.updateValue(targetTemperatureLow);
+        service?.getCharacteristic(Characteristic.HeatingThresholdTemperature)?.updateValue(targetTemperatureHigh);
 
         if (supportedModesList.length > 0) {
-            climateState.climateMode = state.Mode;
+            const targetHeaterCoolerState = mapHeaterCoolerState(climateState.climateMode);
+
+            service?.getCharacteristic(Characteristic.TargetHeaterCoolerState)?.updateValue(targetHeaterCoolerState);
             service
                 ?.getCharacteristic(Characteristic.CurrentHeaterCoolerState)
-                ?.updateValue(mapHeaterCoolerState(climateState.climateMode));
+                ?.updateValue(currentHeaterCoolerState(targetHeaterCoolerState));
         }
 
         if (supportedFanModesList.length > 0) {
@@ -231,7 +252,10 @@ export const climateHelper = (component: any, accessory: PlatformAccessory): boo
             climateState.swingMode = state.swingMode;
             service?.getCharacteristic(Characteristic.RotationDirection)?.updateValue(climateState.swingMode);
         }
+
     });
 
     return true;
 };
+
+

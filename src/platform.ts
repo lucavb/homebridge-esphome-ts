@@ -144,6 +144,7 @@ export class EsphomePlatform implements DynamicPlatformPlugin {
             newAccessory = true;
         }
 
+
         if (!componentHelper(component, accessory)) {
             this.log(`${component.name} could not be mapped to HomeKit. Please file an issue on Github.`);
             if (!newAccessory) {

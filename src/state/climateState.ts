@@ -1,3 +1,9 @@
+import {AsyncEvent} from 'ts-events';
+
+AsyncEvent.setScheduler(function(callback) {
+    setTimeout(callback, 25);
+})
+
 export enum ClimateMode {
     OFF = 0,
     AUTO = 1, // => Characteristic.TargetHeaterCoolerState.AUTO
@@ -20,6 +26,13 @@ enum ClimateFanState {
     QUIET = 9,
 }
 
+enum SwingMode {
+    OFF = 0,
+    HORIZONTAL = 1,
+    VERTICAL = 2,
+    BOTH = 3,
+}
+
 export class ClimateState {
     private date: Date = new Date();
     private temperatureLastChanged: number = this.date.getTime();
@@ -27,18 +40,21 @@ export class ClimateState {
     private Active: boolean = false;
     private FanMode: ClimateFanState = ClimateFanState.OFF;
     private ClimateMode: ClimateMode = ClimateMode.OFF;
-    private SwingMode: number = 0; // RotationDirection
+    private PreviousClimateMode: ClimateMode = ClimateMode.OFF;
+    private SwingMode: SwingMode = SwingMode.OFF; // RotationDirection
     private SupportTwoPointTargetTemperature: boolean = false;
 
     private key: string = '';
 
-    private TargetTemperature: number = 0;
-    private CurrentTemperature: number = 0;
-    private TargetTemperatureLow: number = 0;
-    private TargetTemperatureHigh: number = 0;
+    private TargetTemperature: number = 20;
+    private CurrentTemperature: number = 20;
+    private TargetTemperatureLow: number = 20;
+    private TargetTemperatureHigh: number = 20;
 
     private connection: any;
     private changesMade: boolean = false;
+    
+    private updateEvent = new AsyncEvent<boolean>();
 
     // private previousClimateState : ClimateState = null;
 
@@ -46,37 +62,37 @@ export class ClimateState {
     public constructor(connection: any, key: string) {
         this.connection = connection;
         this.key = key;
+        this.updateEvent.attach(this, this.update);
     }
 
-    public updateEsp() {
+    //create event listener for update variable
+    public updateEsp(): void {
+        this.updateEvent.post(true);
+    }
+
+    private update() {
         if (!this.changesMade) {
             return;
         }
         this.changesMade = false; // stop the spam
 
-        let state = {
+        let targetTemperatureLow : number = this.TargetTemperature;
+        let targetTemperatureHigh : number = this.TargetTemperature;
+
+        if (this.SupportTwoPointTargetTemperature) {
+            targetTemperatureLow = this.ClimateMode === ClimateMode.AUTO ? this.targetTemperatureLow : this.TargetTemperature;
+            targetTemperatureHigh = this.ClimateMode === ClimateMode.AUTO ? this.targetTemperatureHigh : this.TargetTemperature;
+        }
+        const state = {
             key: this.key,
             swingMode: this.SwingMode,
             fanMode: this.FanMode,
             mode: this.ClimateMode, // Heater/Cooler ClimateMode
             targetTemperature: this.TargetTemperature,
+            targetTemperatureLow: targetTemperatureLow,
+            targetTemperatureHigh: targetTemperatureHigh,
         };
 
-        if(this.SupportTwoPointTargetTemperature){
-            let state = {
-                key: this.key,
-                swingMode: this.SwingMode,
-                fanMode: this.FanMode,
-                mode: this.ClimateMode, // Heater/Cooler ClimateMode
-                targetTemperature: this.TargetTemperature,
-                targetTemperatureLow: this.ClimateMode === ClimateMode.AUTO ? this.targetTemperatureLow : this.TargetTemperature,
-                targetTemperatureHigh: this.ClimateMode === ClimateMode.AUTO ? this.targetTemperatureHigh : this.TargetTemperature,
-        
-            }
-            this.connection.climateCommandService(state);
-            return;
-        }
-        
         this.connection.climateCommandService(state);
     }
 
@@ -84,13 +100,19 @@ export class ClimateState {
         return this.Active;
     }
     public set active(value: boolean) {
-        let mode = value ? this.ClimateMode : ClimateMode.OFF;
+
+        let mode = this.PreviousClimateMode;
         if (value && (mode === undefined || mode === ClimateMode.OFF)) {
             mode = ClimateMode.AUTO;
         }
 
         if (this.Active !== value) {
             this.changesMade = true;
+        }
+
+        if(!value){
+            this.PreviousClimateMode = this.ClimateMode;
+            mode = ClimateMode.OFF;
         }
         this.ClimateMode = mode;
         this.Active = value;
@@ -117,10 +139,10 @@ export class ClimateState {
         this.ClimateMode = value;
     }
 
-    public get swingMode(): number {
+    public get swingMode(): SwingMode {
         return this.SwingMode;
     }
-    public set swingMode(value: number) {
+    public set swingMode(value: SwingMode) {
         if (this.SwingMode !== value) {
             this.changesMade = true;
         }
