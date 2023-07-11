@@ -23,8 +23,8 @@ interface IEsphomePlatformConfig extends PlatformConfig {
     discoveryTimeout?: number;
 }
 
-const DEFAULT_RETRY_AFTER = 90 * 1000;
-const DEFAULT_DISCOVERY_TIMEOUT = 5 * 1000; // milliseconds
+const DEFAULT_RETRY_AFTER = 90_000;
+const DEFAULT_DISCOVERY_TIMEOUT = 5_000; // milliseconds
 
 export class EsphomePlatform implements DynamicPlatformPlugin {
     protected readonly espDevices: EspDevice[] = [];
