@@ -3,7 +3,12 @@ import { CharacteristicValue, PlatformAccessory, Service as HAPService } from 'h
 import { tap } from 'rxjs/operators';
 import { Characteristic, Service } from '../index';
 
-const isTemperatureComponent = (unitOfMeasurement: unknown) => unitOfMeasurement === '°C' || unitOfMeasurement === '°F';
+const fahrenheitUnit = '°F';
+
+const isTemperatureComponent = (unitOfMeasurement: unknown) =>
+    unitOfMeasurement === '°C' || unitOfMeasurement === fahrenheitUnit;
+
+const fahrenheitToCelsius = (fahrenheit: number): number => ((fahrenheit - 32) * 5) / 9;
 
 export const sensorHelper = (component: SensorComponent, accessory: PlatformAccessory): boolean => {
     if (isTemperatureComponent(component.unitOfMeasurement)) {
@@ -29,21 +34,24 @@ const defaultSetup = (
     SelectedService: typeof Service.TemperatureSensor | typeof Service.HumiditySensor,
     SelectedCharacteristic: typeof Characteristic.CurrentTemperature | typeof Characteristic.CurrentRelativeHumidity,
 ): void => {
-    let targetSensor: HAPService | undefined = accessory.services.find(
+    let temperatureSensor: HAPService | undefined = accessory.services.find(
         (service) => service.UUID === SelectedService.UUID,
     );
-    if (!targetSensor) {
-        targetSensor = accessory.addService(new SelectedService(component.name, ''));
+    if (!temperatureSensor) {
+        temperatureSensor = accessory.addService(new SelectedService(component.name, ''));
     }
+    const valuesAreFahrenheit = component.unitOfMeasurement === fahrenheitUnit;
 
     component.state$
         .pipe(
             // @ts-ignore
-            tap(() =>
-                targetSensor
-                    ?.getCharacteristic(SelectedCharacteristic)
-                    ?.setValue(component.value! as CharacteristicValue),
-            ),
+            tap(() => {
+                const celsiusValue =
+                    valuesAreFahrenheit && component.value !== undefined
+                        ? fahrenheitToCelsius(component.value)
+                        : component.value;
+                temperatureSensor?.getCharacteristic(SelectedCharacteristic)?.setValue(celsiusValue!);
+            }),
         )
         .subscribe();
 };
