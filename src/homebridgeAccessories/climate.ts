@@ -229,7 +229,6 @@ export const climateHelper = (component: any, accessory: PlatformAccessory): boo
 
         const targetTemperatureLow = climateState.supportTwoPointTargetTemperature ? climateState.targetTemperatureLow : climateState.targetTemperature;
         const targetTemperatureHigh = climateState.supportTwoPointTargetTemperature ? climateState.targetTemperatureHigh : climateState.targetTemperature;
-        console.log('climateState', climateState);
         
         service?.getCharacteristic(Characteristic.CoolingThresholdTemperature)?.updateValue(targetTemperatureLow);
         service?.getCharacteristic(Characteristic.HeatingThresholdTemperature)?.updateValue(targetTemperatureHigh);
