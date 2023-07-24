@@ -102,7 +102,8 @@ export class ClimateState {
         return this.Active;
     }
     public set active(value: boolean) {
-        let mode = this.PreviousClimateMode;
+        // console.log(`active ${value}`);
+        let mode = this.Active ? this.ClimateMode : this.PreviousClimateMode;
         if (value && (mode === undefined || mode === ClimateMode.OFF)) {
             mode = ClimateMode.AUTO;
         }
@@ -123,6 +124,7 @@ export class ClimateState {
         return this.FanMode;
     }
     public set fanMode(value: ClimateFanState) {
+        // console.log(`fanMode ${value}`);
         // this.previousClimateState = Object.assign({}, this);
 
         if (this.FanMode !== value) {
@@ -134,6 +136,7 @@ export class ClimateState {
         return this.ClimateMode;
     }
     public set climateMode(value: ClimateMode) {
+        // console.log(`climateMode ${value}`);
         if (this.ClimateMode !== value) {
             this.changesMade = true;
         }
@@ -144,6 +147,7 @@ export class ClimateState {
         return this.SwingMode;
     }
     public set swingMode(value: SwingMode) {
+        // console.log(`swingMode ${value}`);
         if (this.SwingMode !== value) {
             this.changesMade = true;
         }
@@ -154,6 +158,7 @@ export class ClimateState {
         return this.TargetTemperature;
     }
     public set targetTemperature(value: number) {
+        // console.log(`targetTemperature ${value}`);
         if (this.targetTemperature !== value) {
             this.changesMade = true;
         }
@@ -165,12 +170,14 @@ export class ClimateState {
         return this.CurrentTemperature;
     }
     public set currentTemperature(value: number) {
+        // console.log(`currentTemperature ${value}`);
         this.CurrentTemperature = value;
     }
     public get targetTemperatureLow(): number {
         return this.TargetTemperatureLow;
     }
     public set targetTemperatureLow(value: number) {
+        // console.log(`targetTemperatureLow ${value}`);
         if (this.targetTemperatureLow !== value) {
             this.changesMade = true;
         }
@@ -183,6 +190,7 @@ export class ClimateState {
     }
 
     public set targetTemperatureHigh(value: number) {
+        // console.log(`targetTemperatureHigh ${value}`);
         if (this.targetTemperatureHigh !== value) {
             this.changesMade = true;
         }
@@ -195,6 +203,7 @@ export class ClimateState {
         return this.SupportTwoPointTargetTemperature;
     }
     public set supportTwoPointTargetTemperature(value: boolean) {
+        // console.log(`supportTwoPointTargetTemperature ${value}`);
         this.SupportTwoPointTargetTemperature = value;
     }
 

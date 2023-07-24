@@ -149,7 +149,7 @@ export const climateHelper = (component: any, accessory: PlatformAccessory): boo
                 validValues: targetHeaterCoolerStateList,
             })
             .on(CharacteristicEventTypes.SET, (state: CharacteristicValue, callback: CharacteristicSetCallback) => {
-                // logIfDebug('TargetHeaterCoolerState', state);
+                // console.log(`TargetHeaterCoolerState ${state}`);
                 if (typeof state === 'number') {
                     climateState.climateMode = reverseMapHeaterCoolerState(state);
                     climateState.updateEsp();
