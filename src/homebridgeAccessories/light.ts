@@ -8,9 +8,14 @@ import {
 } from 'homebridge';
 import { Characteristic, Service } from '../index';
 import { ComponentHelper } from './componentHelpers';
-import { DEFAULT_NO_EFFECT, LightComponent, LightStateEvent } from 'esphome-ts';
+const convert = require('color-convert');
 
-export const lightHelper: ComponentHelper = (component: LightComponent, accessory: PlatformAccessory): boolean => {
+enum ColorMode {
+    WHITE = 7,
+    RGB = 35,
+}
+
+export const lightHelper: ComponentHelper = (component: any, accessory: PlatformAccessory): boolean => {
     let lightBulbService: HAPService | undefined = accessory.services.find(
         (service: HAPService) => service.UUID === Service.Lightbulb.UUID,
     );
@@ -18,116 +23,95 @@ export const lightHelper: ComponentHelper = (component: LightComponent, accessor
         lightBulbService = accessory.addService(new Service.Lightbulb(component.name, ''));
     }
 
-    if (component.supportsRgb) {
-        let lastHue: number | undefined;
-        let lastSat: number | undefined;
-        lightBulbService
-            .getCharacteristic(Characteristic.Hue)
-            ?.on(CharacteristicEventTypes.SET, (hue: CharacteristicValue, callback: CharacteristicSetCallback) => {
-                lastHue = hue as number;
-                const hsv = component.hsv;
-                hsv.hue = lastHue ?? 0;
-                hsv.saturation = lastSat ?? 0;
-                component.hsv = hsv;
-                callback();
-            });
-        lightBulbService
-            .getCharacteristic(Characteristic.Saturation)
-            ?.on(
-                CharacteristicEventTypes.SET,
-                (saturation: CharacteristicValue, callback: CharacteristicSetCallback) => {
-                    lastSat = saturation as number;
-                    callback();
-                },
-            );
-        lightBulbService
-            .getCharacteristic(Characteristic.Brightness)
-            ?.on(
-                CharacteristicEventTypes.SET,
-                (brightness: CharacteristicValue, callback: CharacteristicSetCallback) => {
-                    const hsv = component.hsv;
-                    hsv.value = brightness as number;
-                    component.hsv = hsv;
-                    callback();
-                },
-            );
-    } else if (component.supportsBrightness) {
-        lightBulbService
-            .getCharacteristic(Characteristic.Brightness)
-            ?.on(
-                CharacteristicEventTypes.SET,
-                (brightness: CharacteristicValue, callback: CharacteristicSetCallback) => {
-                    if (typeof brightness === 'number') {
-                        component.setBrightness(brightness);
-                    }
-                    callback();
-                },
-            );
-    }
+    const supportsRgb = component.config.legacySupportsRgb as boolean;
+    const supportsBrightness = component.config.legacySupportsBrightness as boolean;
+    const supportsWhiteValue = component.config.legacySupportsWhiteValue as boolean;
+    const supportsColorTemperature = component.config.legacySupportsColorTemperature as boolean;
+
+    let hsvState: number[]; // 0 = H, 1 = S, 2 = V
+    let lightState: boolean;
+
+    lightBulbService
+        .getCharacteristic(Characteristic.Hue)
+        ?.on(CharacteristicEventTypes.SET, (hue: CharacteristicValue, callback: CharacteristicSetCallback) => {
+            hsvState[0] = hue as number;
+            updateEsp();
+            callback();
+        });
+
+    lightBulbService
+        .getCharacteristic(Characteristic.Saturation)
+        ?.on(CharacteristicEventTypes.SET, (saturation: CharacteristicValue, callback: CharacteristicSetCallback) => {
+            hsvState[1] = saturation as number;
+            updateEsp();
+            callback();
+        });
+
+    lightBulbService
+        .getCharacteristic(Characteristic.Brightness)
+        ?.on(CharacteristicEventTypes.SET, (brightness: CharacteristicValue, callback: CharacteristicSetCallback) => {
+            hsvState[2] = brightness as number;
+            updateEsp();
+            callback();
+        });
 
     lightBulbService
         .getCharacteristic(Characteristic.On)
         ?.on(CharacteristicEventTypes.SET, (on: CharacteristicValue, callback: CharacteristicSetCallback) => {
-            !!on ? component.turnOn() : component.turnOff();
+            lightState = on as boolean;
+            updateEsp();
             callback();
         });
 
-    const effects = component
-        .availableEffects()
-        .filter((effect: string) => effect !== DEFAULT_NO_EFFECT)
-        .map((effect: string) => {
-            const switchName = `${component.name} - ${effect}`;
-            const switchSubType = `${effect} Switch`;
-            let switchService: HAPService | undefined = accessory.services.find(
-                (service: HAPService) => service.UUID === Service.Switch.UUID && service.subtype === switchSubType,
-            );
-            if (!switchService) {
-                switchService = accessory.addService(new Service.Switch(switchName, switchSubType));
+    // TODO: Reimplement effects
+
+    component.on('state', (state: any) => {
+        lightState = state.state;
+        const brightness = state.brightness ?? 0;
+
+        lightBulbService!.getCharacteristic(Characteristic.On)?.updateValue(lightState);
+
+        if (supportsRgb && (state.colorMode as ColorMode) === ColorMode.RGB) {
+            hsvState = convert.rgb.hsv.raw(state.red * 255, state.green * 255, state.blue * 255) as number[];
+            lightBulbService!.getCharacteristic(Characteristic.Hue)?.updateValue(hsvState[0]);
+            lightBulbService!.getCharacteristic(Characteristic.Saturation)?.updateValue(hsvState[1]);
+            lightBulbService!.getCharacteristic(Characteristic.Brightness)?.updateValue(hsvState[2] * brightness);
+        } else if (supportsBrightness) {
+            hsvState = convert.rgb.hsv.raw(255, 255, 255) as number[];
+            lightBulbService!.getCharacteristic(Characteristic.Hue)?.updateValue(hsvState[0]);
+            lightBulbService!.getCharacteristic(Characteristic.Saturation)?.updateValue(hsvState[1]);
+            lightBulbService!.getCharacteristic(Characteristic.Brightness)?.updateValue(brightness * 100);
+        }
+    });
+
+    function updateEsp() {
+        const brightness = hsvState[2];
+        hsvState[2] = 100;
+        let rgb = convert.hsv.rgb.raw(hsvState);
+        let mode: ColorMode = ColorMode.RGB;
+
+        if (supportsRgb) {
+            if (hsvState[0] === 0 && hsvState[1] === 0) {
+                mode = ColorMode.WHITE;
+                rgb = [0, 0, rgb[2]];
             }
-            return {
-                service: switchService,
-                name: effect,
-            };
-        });
+        } else if (supportsBrightness) {
+            mode = ColorMode.WHITE;
+            rgb = [0, 0, rgb[2]];
+        }
 
-    if (effects.length > 0) {
-        effects.forEach(({ name, service }): void => {
-            service
-                ?.getCharacteristic(Characteristic.On)
-                ?.on(CharacteristicEventTypes.SET, (on: CharacteristicValue, callback: CharacteristicSetCallback) => {
-                    component.effect = on ? name : DEFAULT_NO_EFFECT;
-                    effects
-                        .filter(({ name: otherEffectName }) => otherEffectName !== name)
-                        .forEach(({ service: otherEffectService }) => {
-                            otherEffectService?.getCharacteristic(Characteristic.On).updateValue(false);
-                        });
-                    callback();
-                });
-        });
+        const state = {
+            key: component.id,
+            state: lightState,
+            brightness: brightness / 100,
+            red: rgb[0] / 255,
+            green: rgb[1] / 255,
+            blue: rgb[2] / 255,
+            colorMode: mode,
+        };
+
+        component.connection.lightCommandService(state);
     }
-
-    component.state$
-        .pipe(
-            tap((state: LightStateEvent) => {
-                lightBulbService!.getCharacteristic(Characteristic.On)?.updateValue(!!state.state);
-                if (component.supportsRgb) {
-                    const hsv = component.hsv;
-                    lightBulbService!.getCharacteristic(Characteristic.Hue)?.updateValue(hsv.hue);
-                    lightBulbService!.getCharacteristic(Characteristic.Saturation)?.updateValue(hsv.saturation);
-                    lightBulbService!.getCharacteristic(Characteristic.Brightness)?.updateValue(hsv.value);
-                } else if (component.supportsBrightness) {
-                    lightBulbService!
-                        .getCharacteristic(Characteristic.Brightness)
-                        ?.updateValue((state.brightness ?? 0) * 100);
-                }
-                if (effects.length > 0) {
-                    effects.forEach(({ name: effectName, service: effectService }): void => {
-                        effectService?.getCharacteristic(Characteristic.On)?.updateValue(effectName === state.effect);
-                    });
-                }
-            }),
-        )
-        .subscribe();
 
     return true;
 };
