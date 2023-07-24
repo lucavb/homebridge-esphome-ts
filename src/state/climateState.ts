@@ -1,8 +1,8 @@
-import {AsyncEvent} from 'ts-events';
+import { AsyncEvent } from 'ts-events';
 
-AsyncEvent.setScheduler(function(callback) {
+AsyncEvent.setScheduler(function (callback) {
     setTimeout(callback, 25);
-})
+});
 
 export enum ClimateMode {
     OFF = 0,
@@ -53,7 +53,7 @@ export class ClimateState {
 
     private connection: any;
     private changesMade: boolean = false;
-    
+
     private updateEvent = new AsyncEvent<boolean>();
 
     // private previousClimateState : ClimateState = null;
@@ -65,7 +65,7 @@ export class ClimateState {
         this.updateEvent.attach(this, this.update);
     }
 
-    //create event listener for update variable
+    // create event listener for update variable
     public updateEsp(): void {
         this.updateEvent.post(true);
     }
@@ -76,12 +76,14 @@ export class ClimateState {
         }
         this.changesMade = false; // stop the spam
 
-        let targetTemperatureLow : number = this.TargetTemperature;
-        let targetTemperatureHigh : number = this.TargetTemperature;
+        let targetTemperatureLow: number = this.TargetTemperature;
+        let targetTemperatureHigh: number = this.TargetTemperature;
 
         if (this.SupportTwoPointTargetTemperature) {
-            targetTemperatureLow = this.ClimateMode === ClimateMode.AUTO ? this.targetTemperatureLow : this.TargetTemperature;
-            targetTemperatureHigh = this.ClimateMode === ClimateMode.AUTO ? this.targetTemperatureHigh : this.TargetTemperature;
+            targetTemperatureLow =
+                this.ClimateMode === ClimateMode.AUTO ? this.targetTemperatureLow : this.TargetTemperature;
+            targetTemperatureHigh =
+                this.ClimateMode === ClimateMode.AUTO ? this.targetTemperatureHigh : this.TargetTemperature;
         }
         const state = {
             key: this.key,
@@ -100,7 +102,6 @@ export class ClimateState {
         return this.Active;
     }
     public set active(value: boolean) {
-
         let mode = this.PreviousClimateMode;
         if (value && (mode === undefined || mode === ClimateMode.OFF)) {
             mode = ClimateMode.AUTO;
@@ -110,7 +111,7 @@ export class ClimateState {
             this.changesMade = true;
         }
 
-        if(!value){
+        if (!value) {
             this.PreviousClimateMode = this.ClimateMode;
             mode = ClimateMode.OFF;
         }

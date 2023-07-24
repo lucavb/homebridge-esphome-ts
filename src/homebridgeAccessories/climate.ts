@@ -54,7 +54,6 @@ function reverseMapHeaterCoolerState(i: number) {
     }
 }
 
-
 export const climateHelper = (component: any, accessory: PlatformAccessory): boolean => {
     let service: HAPService | undefined = accessory.services.find(
         (service: HAPService) => service.UUID === Service.HeaterCooler.UUID,
@@ -67,7 +66,6 @@ export const climateHelper = (component: any, accessory: PlatformAccessory): boo
         return false;
     }
 
-    
     // function logIfDebug(msg?: any, ...parameters: unknown[]): void {
     //     if (debug) {
     //         log(msg, parameters);
@@ -95,9 +93,9 @@ export const climateHelper = (component: any, accessory: PlatformAccessory): boo
             // logIfDebug('CoolingThresholdTemperature', state);
             const temperature = state as number;
 
-            if(climateState.supportTwoPointTargetTemperature){
+            if (climateState.supportTwoPointTargetTemperature) {
                 climateState.targetTemperatureLow = temperature;
-            }else{
+            } else {
                 climateState.targetTemperature = temperature;
             }
             climateState.updateEsp();
@@ -114,9 +112,9 @@ export const climateHelper = (component: any, accessory: PlatformAccessory): boo
             // logIfDebug('HeatingThresholdTemperature', state);
             const temperature = state as number;
 
-            if(climateState.supportTwoPointTargetTemperature){
+            if (climateState.supportTwoPointTargetTemperature) {
                 climateState.targetTemperatureHigh = temperature;
-            }else{
+            } else {
                 climateState.targetTemperature = temperature;
             }
             climateState.updateEsp();
@@ -218,7 +216,7 @@ export const climateHelper = (component: any, accessory: PlatformAccessory): boo
         climateState.targetTemperatureLow = state.targetTemperatureLow;
         climateState.targetTemperatureHigh = state.targetTemperatureHigh;
         climateState.climateMode = state.mode;
-        
+
         service?.getCharacteristic(Characteristic.Active)?.updateValue(climateState.active);
 
         if (component.config.supportsCurrentTemperature) {
@@ -227,9 +225,13 @@ export const climateHelper = (component: any, accessory: PlatformAccessory): boo
         }
         service?.getCharacteristic(Characteristic.TargetTemperature)?.updateValue(climateState.targetTemperature);
 
-        const targetTemperatureLow = climateState.supportTwoPointTargetTemperature ? climateState.targetTemperatureLow : climateState.targetTemperature;
-        const targetTemperatureHigh = climateState.supportTwoPointTargetTemperature ? climateState.targetTemperatureHigh : climateState.targetTemperature;
-        
+        const targetTemperatureLow = climateState.supportTwoPointTargetTemperature
+            ? climateState.targetTemperatureLow
+            : climateState.targetTemperature;
+        const targetTemperatureHigh = climateState.supportTwoPointTargetTemperature
+            ? climateState.targetTemperatureHigh
+            : climateState.targetTemperature;
+
         service?.getCharacteristic(Characteristic.CoolingThresholdTemperature)?.updateValue(targetTemperatureLow);
         service?.getCharacteristic(Characteristic.HeatingThresholdTemperature)?.updateValue(targetTemperatureHigh);
 
@@ -251,10 +253,7 @@ export const climateHelper = (component: any, accessory: PlatformAccessory): boo
             climateState.swingMode = state.swingMode;
             service?.getCharacteristic(Characteristic.RotationDirection)?.updateValue(climateState.swingMode);
         }
-
     });
 
     return true;
 };
-
-

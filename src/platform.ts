@@ -90,10 +90,10 @@ export class EsphomePlatform implements DynamicPlatformPlugin {
         discovery.on('info', (info: any) => {
             const deviceConfig = this.config.devices?.find(({ host }) => host === info.address || host === info.host);
 
-            if (deviceConfig == undefined) return;
+            if (deviceConfig === undefined) return;
 
             let match: boolean = false;
-            if (deviceConfig.host != info.address && deviceConfig.host != info.host) {
+            if (deviceConfig.host !== info.address && deviceConfig.host !== info.host) {
                 return;
             }
 
@@ -143,7 +143,6 @@ export class EsphomePlatform implements DynamicPlatformPlugin {
             accessory = new Accessory(component.name, uuid);
             newAccessory = true;
         }
-
 
         if (!componentHelper(component, accessory)) {
             this.log(`${component.name} could not be mapped to HomeKit. Please file an issue on Github.`);
