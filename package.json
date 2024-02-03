@@ -1,5 +1,5 @@
 {
-    "name": "homebridge-esphome-ts",
+    "name": "@samhunt/homebridge-esphome-ts",
     "version": "1.6.0",
     "description": "New plugin for integrating for esphome into homebridge",
     "main": "dist/index.js",
