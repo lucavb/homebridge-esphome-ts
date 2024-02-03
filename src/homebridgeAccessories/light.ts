@@ -1,4 +1,3 @@
-import { tap } from 'rxjs/operators';
 import {
     CharacteristicEventTypes,
     CharacteristicSetCallback,

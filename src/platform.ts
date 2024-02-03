@@ -3,7 +3,7 @@ import { concat, from, interval, Observable, of, Subscription } from 'rxjs';
 import { catchError, filter, map, mergeMap, take, tap, timeout } from 'rxjs/operators';
 import { componentHelpers } from './homebridgeAccessories/componentHelpers';
 import { Accessory, PLATFORM_NAME, PLUGIN_NAME, UUIDGen } from './index';
-import { writeReadDataToLogFile } from './shared';
+// import { writeReadDataToLogFile } from './shared';
 import { discoverDevices } from './discovery';
 const { Client, Discovery } = require('@2colors/esphome-native-api');
 
@@ -111,7 +111,8 @@ export class EsphomePlatform implements DynamicPlatformPlugin {
 
             if (this.config.debug) {
                 this.log('Writing the raw data from your ESP Device to /tmp');
-                writeReadDataToLogFile(deviceConfig.host, device);
+                // TODO: Fix Debugging
+                // writeReadDataToLogFile(deviceConfig.host, device);
             }
             // get accessories and listen for state changes
 
@@ -130,7 +131,9 @@ export class EsphomePlatform implements DynamicPlatformPlugin {
     private attachAccessory(component: any): void {
         const componentHelper = componentHelpers.get(component.type);
         if (!componentHelper) {
-            this.log(`${component.name} is currently not supported. You might want to file an issue on Github.`);
+            this.log(
+                `${component.name} (${component.type}) is currently not supported. You might want to file an issue on Github.`,
+            );
             return;
         }
 

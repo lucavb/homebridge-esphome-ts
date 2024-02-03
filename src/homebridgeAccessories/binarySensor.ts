@@ -1,6 +1,4 @@
 import { CharacteristicEventTypes, CharacteristicGetCallback } from 'hap-nodejs';
-import { tap } from 'rxjs/operators';
-import { BinarySensorComponent, BinarySensorTypes } from 'esphome-ts';
 import { Characteristic, Service } from '../index';
 import { PlatformAccessory } from 'homebridge';
 
@@ -20,70 +18,109 @@ interface BinarySensorHomekit {
     service: SupportedServices;
 }
 
-const map = (): Map<BinarySensorTypes, BinarySensorHomekit> => {
-    return new Map<BinarySensorTypes, BinarySensorHomekit>([
+const map = (): Map<string, BinarySensorHomekit> => {
+    return new Map<string, BinarySensorHomekit>([
         [
-            BinarySensorTypes.MOTION,
+            'motion',
             {
                 characteristic: Characteristic.MotionDetected,
                 service: Service.MotionSensor,
             },
         ],
         [
-            BinarySensorTypes.WINDOW,
+            'window',
             {
                 characteristic: Characteristic.ContactSensorState,
                 service: Service.ContactSensor,
             },
         ],
         [
-            BinarySensorTypes.DOOR,
+            'door',
             {
                 characteristic: Characteristic.ContactSensorState,
                 service: Service.ContactSensor,
             },
         ],
         [
-            BinarySensorTypes.SMOKE,
+            'smoke',
             {
                 characteristic: Characteristic.SmokeDetected,
                 service: Service.SmokeSensor,
             },
         ],
         [
-            BinarySensorTypes.MOISTURE,
+            'moisture',
             {
                 characteristic: Characteristic.LeakDetected,
                 service: Service.LeakSensor,
             },
         ],
+        [
+            'garage_door',
+            {
+                characteristic: Characteristic.ContactSensorState,
+                service: Service.ContactSensor,
+            },
+        ],
+        // TODO: Figure out which ones make sense
+        // [
+        //     "connectivity",
+        //     {
+        //         characteristic: ,
+        //         service: ,
+        //     },
+        // ],
+
+        [
+            '',
+            {
+                characteristic: Characteristic.On,
+                service: Service.Switch,
+            },
+        ],
     ]);
 };
 
-export const binarySensorHelper = (component: BinarySensorComponent, accessory: PlatformAccessory): boolean => {
-    const homekitStuff = map().get(component.deviceClass);
+export const binarySensorHelper = (component: any, accessory: PlatformAccessory): boolean => {
+    const homekitDevice = map().get(component.config.deviceClass as string);
 
-    if (homekitStuff) {
-        const ServiceConstructor = homekitStuff?.service;
+    if (homekitDevice && !((component?.config?.isStatusBinarySensor as boolean) ?? false)) {
+        const ServiceConstructor = homekitDevice?.service;
         let service = accessory.services.find((service) => service.UUID === ServiceConstructor.UUID);
         if (!service) {
             service = accessory.addService(new ServiceConstructor(component.name, ''));
         }
 
+        let currentState = false;
+
         service
-            .getCharacteristic(homekitStuff.characteristic)
+            .getCharacteristic(homekitDevice.characteristic)
             ?.on(CharacteristicEventTypes.GET, (callback: CharacteristicGetCallback) => {
-                callback(null, component.status);
+                if (component.status !== !!currentState) {
+                    currentState = component.status;
+                    updateEsp();
+                }
+
+                callback();
             });
 
-        component.state$
-            .pipe(
-                tap(() => {
-                    service?.getCharacteristic(homekitStuff.characteristic)?.setValue(component.status);
-                }),
-            )
-            .subscribe();
+        component.on('state', (state: any) => {
+            currentState = state.state;
+
+            service?.getCharacteristic(homekitDevice.characteristic)?.updateValue(state.state);
+        });
+
+        function updateEsp() {
+            const state = {
+                key: component.id,
+                state: currentState,
+            };
+
+            component.connection.lightCommandService(state);
+        }
+
         return true;
     }
+
     return false;
 };
