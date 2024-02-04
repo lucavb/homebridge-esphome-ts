@@ -86,46 +86,75 @@ export class EsphomePlatform implements DynamicPlatformPlugin {
         //     );
         // }
 
-        const discovery = new Discovery();
-        discovery.on('info', (info: any) => {
-            const deviceConfig = this.config.devices?.find(({ host }) => host === info.address || host === info.host);
+        if (this.config.discover) {
+            const discovery = new Discovery();
+            discovery.on('info', (info: any) => {
+                const deviceConfig = this.config.devices?.find(
+                    ({ host }) => host === info.address || host === info.host,
+                );
 
-            if (deviceConfig === undefined) return;
+                if (deviceConfig === undefined) return;
 
-            let match: boolean = false;
-            if (deviceConfig.host !== info.address && deviceConfig.host !== info.host) {
-                return;
-            }
+                let match: boolean = false;
+                if (deviceConfig.host !== info.address && deviceConfig.host !== info.host) {
+                    return;
+                }
 
-            const device = new Client({
-                host: deviceConfig.host,
-                port: deviceConfig.port ?? 6053,
-                encryptionKey: deviceConfig.encryptionKey, // Use encryption key
-                password: deviceConfig.password, // Insert password if you have any (Deprecated)
-                clientInfo: 'homebridge-esphome-ts',
-                reconnect: deviceConfig.retryAfter,
-                reconnectInterval: this.config.retryAfter ?? DEFAULT_RETRY_AFTER,
-            });
+                const device = new Client({
+                    host: deviceConfig.host,
+                    port: deviceConfig.port ?? 6053,
+                    encryptionKey: deviceConfig.encryptionKey, // Use encryption key
+                    password: deviceConfig.password, // Insert password if you have any (Deprecated)
+                    clientInfo: 'homebridge-esphome-ts',
+                    reconnect: deviceConfig.retryAfter,
+                    reconnectInterval: this.config.retryAfter ?? DEFAULT_RETRY_AFTER,
+                });
 
-            device.connect();
+                device.connect();
 
-            if (this.config.debug) {
+                if (this.config.debug) {
+                    this.log('Writing the raw data from your ESP Device to /tmp');
+                    // TODO: Fix Debugging
+                    // writeReadDataToLogFile(deviceConfig.host, device);
+                }
+                // get accessories and listen for state changes
+
+                device.on('newEntity', (entity: any) => {
+                    this.attachAccessory(entity);
+                });
+
+                match = true;
+                // TODO: log if we are unable to find a device
+
                 this.log('Writing the raw data from your ESP Device to /tmp');
-                // TODO: Fix Debugging
-                // writeReadDataToLogFile(deviceConfig.host, device);
-            }
-            // get accessories and listen for state changes
-
-            device.on('newEntity', (entity: any) => {
-                this.attachAccessory(entity);
             });
+            discovery.run();
+        } else {
+            this.config.devices?.forEach((deviceConfig) => {
+                const device = new Client({
+                    host: deviceConfig.host,
+                    port: deviceConfig.port ?? 6053,
+                    encryptionKey: deviceConfig.encryptionKey, // Use encryption key
+                    password: deviceConfig.password, // Insert password if you have any (Deprecated)
+                    clientInfo: 'homebridge-esphome-ts',
+                    reconnect: deviceConfig.retryAfter,
+                    reconnectInterval: this.config.retryAfter ?? DEFAULT_RETRY_AFTER,
+                });
 
-            match = true;
-            // TODO: log if we are unable to find a device
+                device.connect();
 
-            this.log('Writing the raw data from your ESP Device to /tmp');
-        });
-        discovery.run();
+                if (this.config.debug) {
+                    this.log('Writing the raw data from your ESP Device to /tmp');
+                    // TODO: Fix Debugging
+                    // writeReadDataToLogFile(deviceConfig.host, device);
+                }
+                // get accessories and listen for state changes
+
+                device.on('newEntity', (entity: any) => {
+                    this.attachAccessory(entity);
+                });
+            });
+        }
     }
 
     private attachAccessory(component: any): void {
