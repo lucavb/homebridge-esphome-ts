@@ -166,7 +166,7 @@ export class EsphomePlatform implements DynamicPlatformPlugin {
             return;
         }
 
-        const uuid = UUIDGen.generate(component.name);
+        const uuid = UUIDGen.generate(component.config.key.toString());
         let newAccessory = false;
 
         let accessory: PlatformAccessory | undefined = this.accessories.find((accessory) => accessory.UUID === uuid);
@@ -186,7 +186,7 @@ export class EsphomePlatform implements DynamicPlatformPlugin {
 
         this.log(`${component.name} discovered and setup.`);
         if (accessory && newAccessory) {
-            console.log('adding accessory', accessory.UUID);
+            this.log(`adding accessory ${component.name} ${accessory.UUID}`);
             this.accessories.push(accessory);
             this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
         }
