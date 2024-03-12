@@ -4,6 +4,7 @@ import { sensorHelper } from './sensor';
 import { switchHelper } from './switch';
 import { climateHelper } from './climate';
 import { coverHelper } from './cover';
+import { textSensorHelper } from './textSensor';
 import { PlatformAccessory } from 'homebridge';
 
 export type ComponentHelper = (component: any, accessory: PlatformAccessory) => boolean;
@@ -15,4 +16,5 @@ export const componentHelpers = new Map<string, ComponentHelper>([
     ['Switch', switchHelper],
     ['Climate', climateHelper],
     ['Cover', coverHelper],
+    ['TextSensor', textSensorHelper],
 ]);
