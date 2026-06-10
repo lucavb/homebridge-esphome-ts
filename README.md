@@ -19,8 +19,9 @@
 
 ## Installation
 
-> **Beta:** A pre-release for Homebridge 2 / Node 22+ is available for testing:
-> `npm install -g homebridge-esphome-ts@beta`
+> **Beta (testing):** Homebridge 2 / Node 22+ pre-release — not confirmed with real hardware yet.
+> Install with: `npm install -g homebridge-esphome-ts@beta`
+> Please [open an issue](https://github.com/lucavb/homebridge-esphome-ts/issues) with feedback.
 
 Install through [Homebridge Config UI X](https://github.com/oznu/homebridge-config-ui-x) or manually:
 

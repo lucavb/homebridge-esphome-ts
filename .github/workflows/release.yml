@@ -4,6 +4,7 @@ on:
     push:
         branches:
             - master
+            - beta
     workflow_dispatch:
 
 permissions:
