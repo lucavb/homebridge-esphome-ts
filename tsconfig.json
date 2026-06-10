@@ -1,17 +1,19 @@
 {
     "compilerOptions": {
-        "target": "es6",
+        "target": "ES2023",
         "module": "commonjs",
+        "lib": ["ES2023"],
+        "skipLibCheck": true,
         "declaration": true,
+        "declarationMap": true,
+        "sourceMap": true,
+        "outDir": "./dist",
+        "rootDir": "./src",
         "strict": true,
         "esModuleInterop": true,
-        "forceConsistentCasingInFileNames": true,
-        "outDir": "dist"
+        "noImplicitAny": false,
+        "experimentalDecorators": true
     },
-    "include": [
-        "src"
-    ],
-    "exclude": [
-        "node_modules"
-    ]
+    "include": ["src/"],
+    "exclude": ["**/*.spec.ts", "dist", "node_modules"]
 }

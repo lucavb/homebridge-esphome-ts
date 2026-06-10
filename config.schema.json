@@ -7,63 +7,102 @@
         "properties": {
             "devices": {
                 "title": "Devices",
+                "description": "ESPHome devices to connect to. Only the host is required; password defaults to empty and port defaults to 6053.",
                 "type": "array",
                 "items": {
                     "type": "object",
                     "properties": {
                         "host": {
-                            "name": "Host",
-                            "type": "string"
+                            "title": "Host",
+                            "description": "Hostname or IP address of the ESPHome device.",
+                            "type": "string",
+                            "placeholder": "e.g. my-esp.local"
                         },
                         "port": {
-                            "name": "Port",
-                            "type": "number",
-                            "required": false
+                            "title": "Port",
+                            "description": "Native API port. Defaults to 6053.",
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 65535,
+                            "placeholder": "6053"
                         },
                         "password": {
-                            "name": "Password",
-                            "type": "string",
-                            "required": false
+                            "title": "Password",
+                            "description": "API password configured in ESPHome.",
+                            "type": "string"
+                        },
+                        "retryAfter": {
+                            "title": "Retry after",
+                            "description": "Milliseconds to wait before reconnecting to this device. Overrides the platform value.",
+                            "type": "integer",
+                            "minimum": 1000,
+                            "placeholder": "90000"
                         }
                     }
                 }
             },
-            "debug": {
-                "title": "Debug",
-                "type": "boolean",
-                "required": false
-            },
             "discover": {
                 "title": "Discover devices",
+                "description": "Discover password-less ESPHome devices on the local network using mDNS.",
                 "type": "boolean",
-                "required": false
+                "default": false
             },
             "discoveryTimeout": {
                 "title": "Discovery timeout",
+                "description": "Milliseconds to wait for mDNS discovery before continuing with configured devices.",
                 "type": "integer",
                 "minimum": 0,
-                "required": false
+                "default": 5000,
+                "placeholder": "5000"
+            },
+            "retryAfter": {
+                "title": "Retry after",
+                "description": "Default milliseconds to wait before reconnecting to a device.",
+                "type": "integer",
+                "minimum": 1000,
+                "default": 90000,
+                "placeholder": "90000"
+            },
+            "blacklist": {
+                "title": "Blacklist",
+                "description": "Component names (as shown in HomeKit) to exclude from this plugin.",
+                "type": "array",
+                "items": {
+                    "type": "string"
+                }
+            },
+            "debug": {
+                "title": "Debug",
+                "description": "Log raw ESPHome API traffic to the console and to files under /tmp.",
+                "type": "boolean",
+                "default": false
             }
         }
     },
-    "form": [
+    "layout": [
         {
-            "type": "section",
+            "type": "fieldset",
             "expandable": true,
             "expanded": true,
             "title": "Devices",
             "items": [
+                "discover",
+                {
+                    "key": "discoveryTimeout",
+                    "condition": "discover"
+                },
                 {
                     "key": "devices",
-                    "items": [
-                        "devices[].host",
-                        "devices[].port",
-                        "devices[].password"
-                    ]
+                    "type": "array",
+                    "items": ["devices[].host", "devices[].port", "devices[].password", "devices[].retryAfter"]
                 }
             ]
         },
-        "debug",
-        "discover"
+        {
+            "type": "fieldset",
+            "expandable": true,
+            "title": "Advanced",
+            "items": ["retryAfter", "blacklist", "debug"]
+        }
     ]
 }

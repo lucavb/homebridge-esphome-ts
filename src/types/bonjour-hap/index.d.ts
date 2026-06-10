@@ -1,5 +1,7 @@
 declare module 'bonjour-hap' {
-    export type BonjourFindOptions = {};
+    export interface BonjourFindOptions {
+        type?: string;
+    }
 
     export type BonjourService = {
         name: string;

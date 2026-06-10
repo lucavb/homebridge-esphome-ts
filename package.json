@@ -1,57 +1,88 @@
 {
     "name": "homebridge-esphome-ts",
-    "version": "1.5.3",
-    "description": "New plugin for integrating for esphome into homebridge",
-    "main": "dist/index.js",
-    "types": "dist/index.d.ts",
-    "scripts": {
-        "build": "tsc",
-        "cbuild": "npm run clean && npm run build",
-        "clean": "rm -rf dist",
-        "format": "npm run format:eslint && npm run format:prettier",
-        "format:eslint": "eslint --fix src/**/*.ts",
-        "format:prettier": "prettier -w --ignore-unknown ./src",
-        "integration:test": "homebridge -U examples -P .",
-        "prepack": "npm run format && npm run cbuild",
-        "test": "jest"
+    "version": "2.0.0-beta.0",
+    "description": "Homebridge plugin for integrating ESPHome devices into HomeKit",
+    "keywords": [
+        "homebridge",
+        "homebridge-plugin",
+        "esphome",
+        "homekit",
+        "smart-home",
+        "home-automation",
+        "iot"
+    ],
+    "homepage": "https://github.com/lucavb/homebridge-esphome-ts#readme",
+    "bugs": {
+        "url": "https://github.com/lucavb/homebridge-esphome-ts/issues"
     },
-    "repository": "https://github.com/lucavb/homebridge-esphome-ts",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/lucavb/homebridge-esphome-ts.git"
+    },
+    "license": "GPL-3.0",
+    "author": "Luca Becker <luca.becker@sunbury.xyz> (https://sunbury.xyz/)",
+    "sideEffects": false,
+    "type": "module",
+    "main": "./dist/index.mjs",
+    "types": "./dist/index.d.mts",
+    "exports": {
+        "import": "./dist/index.mjs",
+        "require": "./dist/index.cjs",
+        "types": "./dist/index.d.mts"
+    },
     "files": [
         "dist",
         "config.schema.json"
     ],
-    "keywords": [
-        "homebridge",
-        "esphome",
-        "homebridge-plugin"
-    ],
-    "author": "Luca Becker <luca.becker@sunbury.xyz> (https://sunbury.xyz/)",
-    "license": "GPL-3.0",
-    "engines": {
-        "node": ">=0.12.0",
-        "homebridge": ">=0.4.0"
+    "scripts": {
+        "build": "tsdown",
+        "commitlint": "commitlint --edit",
+        "cq": "npm run cq:typecheck && npm run cq:eslint && npm run cq:prettier && npm run build",
+        "cq:eslint": "eslint . --max-warnings=0",
+        "cq:eslint:fix": "eslint . --max-warnings=0 --fix",
+        "cq:prettier": "prettier --check .",
+        "cq:prettier:fix": "prettier --write .",
+        "cq:typecheck": "tsc --noEmit",
+        "integration:test": "homebridge -U examples -P .",
+        "publishd": "npm publish --dry-run",
+        "release": "semantic-release",
+        "test": "vitest run",
+        "test:ci": "vitest run --reporter=verbose",
+        "test:watch": "vitest"
     },
     "dependencies": {
-        "bonjour-hap": "3.6.3",
-        "color-convert": "2.0.1",
+        "bonjour-hap": "3.10.3",
         "esphome-ts": "3.3.1",
-        "rxjs": "7.8.1"
+        "ip": "2.0.1",
+        "rxjs": "7.8.2"
     },
     "devDependencies": {
-        "@types/color-convert": "2.0.0",
-        "@types/ip": "1.1.0",
-        "@types/node": "18.7.13",
-        "@typescript-eslint/eslint-plugin": "5.34.0",
-        "@typescript-eslint/parser": "5.34.0",
-        "eslint": "8.22.0",
-        "eslint-config-google": "0.14.0",
-        "eslint-config-prettier": "8.5.0",
-        "eslint-plugin-import": "2.26.0",
-        "eslint-plugin-prettier": "4.2.1",
-        "hap-nodejs": "0.10.2",
-        "homebridge": "1.5.0",
-        "prettier": "2.7.1",
-        "prettier-eslint": "15.0.1",
-        "typescript": "4.7.4"
+        "@commitlint/cli": "21.0.2",
+        "@commitlint/config-conventional": "21.0.2",
+        "@commitlint/types": "21.0.1",
+        "@eslint/js": "10.0.1",
+        "@semantic-release/commit-analyzer": "^13.0.0",
+        "@semantic-release/github": "^12.0.0",
+        "@semantic-release/npm": "^13.0.0",
+        "@semantic-release/release-notes-generator": "^14.0.0",
+        "@types/ip": "1.1.3",
+        "@types/node": "24.13.1",
+        "eslint": "10.4.1",
+        "homebridge": "2.1.0",
+        "jiti": "2.7.0",
+        "prettier": "3.8.3",
+        "rimraf": "6.1.3",
+        "semantic-release": "^25.0.0",
+        "tsdown": "0.22.2",
+        "typescript": "6.0.3",
+        "typescript-eslint": "8.60.1",
+        "vitest": "4.1.8"
+    },
+    "engines": {
+        "homebridge": "^1.6.0 || ^2.0.0",
+        "node": "^22 || ^24"
+    },
+    "publishConfig": {
+        "access": "public"
     }
 }

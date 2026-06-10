@@ -1,27 +1,37 @@
-import { CharacteristicEventTypes } from 'hap-nodejs';
-import { tap } from 'rxjs/operators';
-import { Characteristic, Service } from '../index';
+import {
+    CharacteristicEventTypes,
+    CharacteristicSetCallback,
+    CharacteristicValue,
+    PlatformAccessory,
+} from 'homebridge';
 import { SwitchComponent } from 'esphome-ts';
-import { CharacteristicSetCallback, CharacteristicValue, PlatformAccessory } from 'homebridge';
+import { Subscription } from 'rxjs';
+import { tap } from 'rxjs/operators';
 
-export const switchHelper = (component: SwitchComponent, accessory: PlatformAccessory): boolean => {
-    let service = accessory.services.find((service) => service.UUID === Service.Switch.UUID);
+import { Characteristic, Service } from '../hap';
+
+export const switchHelper = (component: SwitchComponent, accessory: PlatformAccessory): Subscription | false => {
+    let service = accessory.services.find((existingService) => existingService.UUID === Service.Switch.UUID);
     if (!service) {
         service = accessory.addService(new Service.Switch(component.name, ''));
     }
 
-    component.state$
-        .pipe(tap(() => service?.getCharacteristic(Characteristic.On)?.setValue(component.status)))
+    const subscription = component.state$
+        .pipe(tap(() => service?.getCharacteristic(Characteristic.On)?.updateValue(component.status)))
         .subscribe();
 
     service
         .getCharacteristic(Characteristic.On)
         ?.on(CharacteristicEventTypes.SET, (value: CharacteristicValue, callback: CharacteristicSetCallback) => {
             if (component.status !== !!value) {
-                !!value ? component.turnOn() : component.turnOff();
+                if (value) {
+                    component.turnOn();
+                } else {
+                    component.turnOff();
+                }
             }
             callback();
         });
 
-    return true;
+    return subscription;
 };

@@ -1,0 +1,54 @@
+name: Release
+
+on:
+    push:
+        branches:
+            - master
+    workflow_dispatch:
+
+permissions:
+    contents: write
+    id-token: write
+    issues: write
+    pull-requests: write
+
+jobs:
+    release:
+        name: Release
+        runs-on: ubuntu-latest
+        timeout-minutes: 15
+        if: "!contains(github.event.head_commit.message, 'skip ci')"
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v6
+              with:
+                  fetch-depth: 0
+
+            - name: Use Node.js
+              uses: actions/setup-node@v6
+              with:
+                  node-version: '24'
+                  cache: 'npm'
+
+            - name: Install dependencies
+              run: npm ci
+
+            - name: Install Homebridge
+              run: npm install -g homebridge
+
+            - name: Code Quality
+              run: npm run cq
+
+            - name: Tests
+              run: npm run test:ci
+
+            - name: Build
+              run: npm run build
+
+            - name: Upgrade npm for OIDC trusted publishing
+              run: npm install -g npm@latest
+
+            - name: Release
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              run: npx semantic-release

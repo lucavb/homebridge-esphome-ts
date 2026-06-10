@@ -1,8 +1,9 @@
-import { CharacteristicEventTypes, CharacteristicGetCallback } from 'hap-nodejs';
-import { tap } from 'rxjs/operators';
+import { CharacteristicEventTypes, CharacteristicGetCallback, PlatformAccessory } from 'homebridge';
 import { BinarySensorComponent, BinarySensorTypes } from 'esphome-ts';
-import { Characteristic, Service } from '../index';
-import { PlatformAccessory } from 'homebridge';
+import { Subscription } from 'rxjs';
+import { tap } from 'rxjs/operators';
+
+import { Characteristic, Service } from '../hap';
 
 type SupportedServices =
     | typeof Service.MotionSensor
@@ -60,30 +61,35 @@ const map = (): Map<BinarySensorTypes, BinarySensorHomekit> => {
     ]);
 };
 
-export const binarySensorHelper = (component: BinarySensorComponent, accessory: PlatformAccessory): boolean => {
+export const binarySensorHelper = (
+    component: BinarySensorComponent,
+    accessory: PlatformAccessory,
+): Subscription | false => {
     const homekitStuff = map().get(component.deviceClass);
 
-    if (homekitStuff) {
-        const ServiceConstructor = homekitStuff?.service;
-        let service = accessory.services.find((service) => service.UUID === ServiceConstructor.UUID);
-        if (!service) {
-            service = accessory.addService(new ServiceConstructor(component.name, ''));
-        }
-
-        service
-            .getCharacteristic(homekitStuff.characteristic)
-            ?.on(CharacteristicEventTypes.GET, (callback: CharacteristicGetCallback) => {
-                callback(null, component.status);
-            });
-
-        component.state$
-            .pipe(
-                tap(() => {
-                    service?.getCharacteristic(homekitStuff.characteristic)?.setValue(component.status);
-                }),
-            )
-            .subscribe();
-        return true;
+    if (!homekitStuff) {
+        return false;
     }
-    return false;
+
+    const ServiceConstructor = homekitStuff.service;
+    let service = accessory.services.find((existingService) => existingService.UUID === ServiceConstructor.UUID);
+    if (!service) {
+        service = accessory.addService(new ServiceConstructor(component.name, ''));
+    }
+
+    service
+        .getCharacteristic(homekitStuff.characteristic)
+        ?.on(CharacteristicEventTypes.GET, (callback: CharacteristicGetCallback) => {
+            callback(null, component.status);
+        });
+
+    const subscription = component.state$
+        .pipe(
+            tap(() => {
+                service?.getCharacteristic(homekitStuff.characteristic)?.updateValue(component.status);
+            }),
+        )
+        .subscribe();
+
+    return subscription;
 };

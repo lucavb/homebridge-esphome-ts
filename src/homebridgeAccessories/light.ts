@@ -6,11 +6,11 @@ import {
     PlatformAccessory,
     Service as HAPService,
 } from 'homebridge';
-import { Characteristic, Service } from '../index';
-import { ComponentHelper } from './componentHelpers';
+import { Characteristic, Service } from '../hap';
 import { DEFAULT_NO_EFFECT, LightComponent, LightStateEvent } from 'esphome-ts';
+import { Subscription } from 'rxjs';
 
-export const lightHelper: ComponentHelper = (component: LightComponent, accessory: PlatformAccessory): boolean => {
+export const lightHelper = (component: LightComponent, accessory: PlatformAccessory): Subscription | false => {
     let lightBulbService: HAPService | undefined = accessory.services.find(
         (service: HAPService) => service.UUID === Service.Lightbulb.UUID,
     );
@@ -68,7 +68,11 @@ export const lightHelper: ComponentHelper = (component: LightComponent, accessor
     lightBulbService
         .getCharacteristic(Characteristic.On)
         ?.on(CharacteristicEventTypes.SET, (on: CharacteristicValue, callback: CharacteristicSetCallback) => {
-            !!on ? component.turnOn() : component.turnOff();
+            if (on) {
+                component.turnOn();
+            } else {
+                component.turnOff();
+            }
             callback();
         });
 
@@ -106,7 +110,7 @@ export const lightHelper: ComponentHelper = (component: LightComponent, accessor
         });
     }
 
-    component.state$
+    const subscription = component.state$
         .pipe(
             tap((state: LightStateEvent) => {
                 lightBulbService!.getCharacteristic(Characteristic.On)?.updateValue(!!state.state);
@@ -129,5 +133,5 @@ export const lightHelper: ComponentHelper = (component: LightComponent, accessor
         )
         .subscribe();
 
-    return true;
+    return subscription;
 };

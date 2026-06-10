@@ -1,0 +1,42 @@
+name: CI
+
+on:
+    push:
+        branches: [master, 'renovate/**']
+    pull_request:
+        branches: [master]
+
+jobs:
+    test:
+        runs-on: ubuntu-latest
+
+        strategy:
+            matrix:
+                node-version: ['22', '24']
+
+        steps:
+            - uses: actions/checkout@v6
+              with:
+                  fetch-depth: 0
+
+            - name: Setup Node.js ${{ matrix.node-version }}
+              uses: actions/setup-node@v6
+              with:
+                  node-version: ${{ matrix.node-version }}
+                  cache: 'npm'
+
+            - name: Install dependencies
+              run: npm ci
+
+            - name: Install Homebridge
+              run: npm install -g homebridge
+
+            - name: Validate commit messages
+              if: github.event_name == 'pull_request'
+              run: npx commitlint --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }} --verbose
+
+            - name: Run code quality checks
+              run: npm run cq
+
+            - name: Run tests
+              run: npm run test:ci

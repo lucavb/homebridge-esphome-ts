@@ -1,99 +1,97 @@
 # homebridge-esphome-ts
 
-This plugin integrates the [esphome](https://esphome.io/) platform into homebridge so that you don't have to go
-through homeassistant if you don't want to (not that there is anything wrong with that). It makes use of the native API of esphome
-so that you can expect instant updates for all your binary sensors what have you.
+[![npm-version](https://badgen.net/npm/v/homebridge-esphome-ts)](https://www.npmjs.com/package/homebridge-esphome-ts)
+[![CI](https://github.com/lucavb/homebridge-esphome-ts/actions/workflows/ci.yml/badge.svg)](https://github.com/lucavb/homebridge-esphome-ts/actions/workflows/ci.yml)
 
-Supported components include:
+[Homebridge](https://homebridge.io) plugin for [ESPHome](https://esphome.io/), connecting ESP devices directly to HomeKit via the native ESPHome API — no Home Assistant required.
 
--   Lights
--   Switches
--   BinarySensors (motion, window, door, smoke and leakage)
--   Sensors (temperature & humidity at the moment)
+## Supported components
 
-This project is currently still in beta, but I thought that many eyes see more than just
-my two :)
+- Lights (including RGB and brightness)
+- Switches
+- Binary sensors (motion, window, door, smoke, leakage)
+- Sensors (temperature and humidity)
+
+## Requirements
+
+- Node.js **22** or **24**
+- Homebridge **1.6+** or **2.x**
 
 ## Installation
 
-Unless you haven't done so already, make sure to install homebridge first. See instructions
-[here](https://github.com/homebridge/homebridge/wiki). Once you have done this, you can install this plugin by typing
+> **Beta:** A pre-release for Homebridge 2 / Node 22+ is available for testing:
+> `npm install -g homebridge-esphome-ts@beta`
 
+Install through [Homebridge Config UI X](https://github.com/oznu/homebridge-config-ui-x) or manually:
+
+1. Install [Homebridge](https://github.com/homebridge/homebridge/wiki).
+2. Run `npm install -g homebridge-esphome-ts` (or `@beta` for the current pre-release).
+3. Add the platform to your `config.json`:
+
+```json
+"platforms": [
+    {
+        "platform": "esphome",
+        "devices": [
+            {
+                "host": "my-esp.local",
+                "password": "",
+                "port": 6053
+            }
+        ],
+        "discover": true
+    }
+]
 ```
-npm i -g homebridge-esphome-ts
-```
 
-Once this is done, you can configure your homebridge config.json according to the next section.
+Make sure your ESPHome configuration includes an `api:` section. See [`examples/esphome_configuration.yaml`](examples/esphome_configuration.yaml) for a starting point.
 
-## Getting Started
+## Configuration
+
+All options are optional unless noted.
+
+| Option                 | Type     | Default        | Description                                                      |
+| ---------------------- | -------- | -------------- | ---------------------------------------------------------------- |
+| `devices`              | array    | `[]`           | ESPHome devices to connect to. Each entry needs at least `host`. |
+| `devices[].host`       | string   | —              | Hostname or IP address (**required** per device).                |
+| `devices[].port`       | number   | `6053`         | Native API port.                                                 |
+| `devices[].password`   | string   | `""`           | API password from your ESPHome config.                           |
+| `devices[].retryAfter` | number   | platform value | Reconnect delay for this device (ms).                            |
+| `discover`             | boolean  | `false`        | Discover password-less devices via mDNS.                         |
+| `discoveryTimeout`     | number   | `5000`         | mDNS discovery timeout (ms).                                     |
+| `retryAfter`           | number   | `90000`        | Default reconnect delay (ms).                                    |
+| `blacklist`            | string[] | `[]`           | Component names to exclude from HomeKit.                         |
+| `debug`                | boolean  | `false`        | Log raw API traffic to console and `/tmp`.                       |
+
+When `discover` is enabled and you have no password-protected devices, you can omit the `devices` array entirely.
+
+Per-device `retryAfter` overrides the platform-level value when set.
+
+### Blacklist example
 
 ```json
 {
     "platform": "esphome",
-    "devices": [
-        {
-            "host": "my_esp.local",
-            "password": "Passw0rd!",
-            "port": 9001,
-            "retryAfter": 120000 // optional, time in milliseconds!
-        }
-    ],
-    "retryAfter": 60000 // optional, time in milliseconds!
+    "devices": [{ "host": "my-esp.local" }],
+    "blacklist": ["My blacklisted switch"]
 }
 ```
-
-Only the `host` key is mandatory under devices. As password `''` is assumed aka no password and the default
-port number 6053 is also wired into the plugin. You can add, in theory, as many ESP devices as you want to
-that array.
-
-If some of your devices are password-less you can enable devices discovery to let the plugin find all your
-devices by setting `discover: true` in platform configuration. In case if you don't have any password-secured
-devices you can even fully omit `"devices"` section in platform configuration.
-
-In case you don't have a working esphome configuration you can have look at the examples folder. There you will
-find both an example homebridge `config.json` file as well as an example esphome configuration. For further guidance
-on esphome please check out their website.
-
-### retryAfter
-
-Both `retryAfter` keys are as explained optional and need to contain an integer that tells this plugin
-after what time frame it should try to reconnect. Keep in mind that this value needs to be in _milliseconds_. The inner
-`retryAfter` will trump the outer value if present. The default value is 90 seconds.
-
-### Blacklisting
-
-If for some reason you want to exclude a specific component from this plugin just
-add a key containing its name (as it was defined in esphome and is shown initially in HomeKit) to a string array under the key `blacklist`:
-
-```json
-{
-    "platform": "esphome",
-    "devices": [
-        ...
-    ],
-    "blacklist": [
-        "My blacklisted switch"
-    ]
-}
-```
-
-## Todo
-
--   [x] Implement a blacklist for components
--   [ ] Testing, especially with the new homebridge version
--   [x] Implement sensor component
 
 ## Troubleshooting
 
-Please make sure to add the `api` entry to your config!
+Add `"debug": true` to your platform config and attach the console output (and `/tmp/esphome-log-*.json` files if present) when opening a GitHub issue. Remove sensitive data from your config before sharing.
 
-If you still have problems please feel free to open a ticket on GitHub. Before doing so add this to your
-config `"debug": true`. The plugin will now output what it has gotten from your ESP device.
-Please append this when you open a ticket here on GitHub. Please attach your config as well and make
-sure to remove any sensitive information such as WiFi passwords.
+## Development
 
-In addition to simply writing stuff to the console, it will also write everything received from your devices to individual
-files under `/tmp`. You can then submit these files with any issues you might file on GitHub.
+```bash
+npm ci
+npm run cq      # typecheck, lint, format check, build
+npm run test    # unit tests
+npm run integration:test  # manual smoke test with examples/
+```
 
-_Slight warning_ The writing of these files means that it will also occupy more space on your SD card or whatever you
-might have. So simply turn off this option once you don't need it anymore.
+Releases are automated via [semantic-release](https://semantic-release.gitbook.io/) on pushes to `main`.
+
+## License
+
+GPL-3.0

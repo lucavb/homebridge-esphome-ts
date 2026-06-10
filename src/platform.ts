@@ -1,52 +1,40 @@
 import { API, DynamicPlatformPlugin, Logging, PlatformAccessory, PlatformConfig } from 'homebridge';
+import { EspDevice } from 'esphome-ts';
 import { concat, from, interval, Observable, of, Subscription } from 'rxjs';
 import { catchError, filter, map, mergeMap, take, tap, timeout } from 'rxjs/operators';
-import { componentHelpers } from './homebridgeAccessories/componentHelpers';
-import { Accessory, PLATFORM_NAME, PLUGIN_NAME, UUIDGen } from './index';
-import { writeReadDataToLogFile } from './shared';
-import { EspDevice } from 'esphome-ts';
+
+import { DeviceOptions, PlatformOptions } from './config';
 import { discoverDevices } from './discovery';
+import { componentHelpers } from './homebridgeAccessories/componentHelpers';
+import { Accessory, initHap, PLATFORM_NAME, PLUGIN_NAME, UUIDGen } from './hap';
+import { writeReadDataToLogFile } from './shared';
 
-interface IEsphomeDeviceConfig {
-    host: string;
-    port?: number;
-    password?: string;
-    retryAfter?: number;
-}
-
-interface IEsphomePlatformConfig extends PlatformConfig {
-    devices?: IEsphomeDeviceConfig[];
-    blacklist?: string[];
-    debug?: boolean;
-    retryAfter?: number;
-    discover?: boolean;
-    discoveryTimeout?: number;
-}
-
-const DEFAULT_RETRY_AFTER = 90_000;
-const DEFAULT_DISCOVERY_TIMEOUT = 5_000; // milliseconds
+export { PLATFORM_NAME, PLUGIN_NAME } from './hap';
 
 export class EsphomePlatform implements DynamicPlatformPlugin {
     protected readonly espDevices: EspDevice[] = [];
+    protected readonly options: PlatformOptions;
     protected readonly blacklistSet: Set<string>;
-    protected readonly subscription: Subscription;
+    protected readonly subscription = new Subscription();
     protected readonly accessories: PlatformAccessory[] = [];
 
     constructor(
         protected readonly log: Logging,
-        protected readonly config: IEsphomePlatformConfig,
+        config: PlatformConfig,
         protected readonly api: API,
     ) {
-        this.subscription = new Subscription();
+        initHap(api);
+        this.options = new PlatformOptions(config);
         this.log('starting esphome');
-        if (!Array.isArray(this.config.devices) && !this.config.discover) {
+
+        if (!this.options.devices.length && !this.options.discover) {
             this.log.error(
                 'You did not specify a devices array and discovery is ' +
                     'disabled! Esphome will not provide any accessories',
             );
-            this.config.devices = [];
         }
-        this.blacklistSet = new Set<string>(this.config.blacklist ?? []);
+
+        this.blacklistSet = new Set<string>(this.options.blacklist);
 
         this.api.on('didFinishLaunching', () => {
             this.onHomebridgeDidFinishLaunching();
@@ -58,13 +46,13 @@ export class EsphomePlatform implements DynamicPlatformPlugin {
     }
 
     protected onHomebridgeDidFinishLaunching(): void {
-        let devices: Observable<IEsphomeDeviceConfig> = from(this.config.devices ?? []);
-        if (this.config.discover) {
+        let devices: Observable<DeviceOptions> = from(this.options.devices);
+        if (this.options.discover) {
             const excludeConfigDevices: Set<string> = new Set();
             devices = concat(
-                discoverDevices(this.config.discoveryTimeout ?? DEFAULT_DISCOVERY_TIMEOUT, this.log).pipe(
+                discoverDevices(this.options.discoveryTimeout, this.log).pipe(
                     map((discoveredDevice) => {
-                        const configDevice = this.config.devices?.find(({ host }) => host === discoveredDevice.host);
+                        const configDevice = this.options.devices.find(({ host }) => host === discoveredDevice.host);
                         let deviceConfig = discoveredDevice;
                         if (configDevice) {
                             excludeConfigDevices.add(configDevice.host);
@@ -73,13 +61,10 @@ export class EsphomePlatform implements DynamicPlatformPlugin {
 
                         return {
                             ...deviceConfig,
-                            // Override hostname with ip address when available
-                            // to avoid issues with mDNS resolution at OS level
                             host: discoveredDevice.address ?? discoveredDevice.host,
                         };
                     }),
                 ),
-                // Feed into output remaining devices from config that haven't been discovered
                 devices.pipe(filter(({ host }) => !excludeConfigDevices.has(host))),
             );
         }
@@ -89,12 +74,16 @@ export class EsphomePlatform implements DynamicPlatformPlugin {
                 .pipe(
                     mergeMap((deviceConfig) => {
                         const device = new EspDevice(deviceConfig.host, deviceConfig.password, deviceConfig.port);
-                        if (this.config.debug) {
+                        this.espDevices.push(device);
+                        if (this.options.debug) {
                             this.log('Writing the raw data from your ESP Device to /tmp');
-                            writeReadDataToLogFile(deviceConfig.host, device);
+                            const debugSubscription = writeReadDataToLogFile(deviceConfig.host, device);
+                            if (debugSubscription) {
+                                this.subscription.add(debugSubscription);
+                            }
                         }
                         device.provideRetryObservable(
-                            interval(deviceConfig.retryAfter ?? this.config.retryAfter ?? DEFAULT_RETRY_AFTER).pipe(
+                            interval(deviceConfig.retryAfter ?? this.options.retryAfter).pipe(
                                 tap(() => this.log.info(`Trying to reconnect now to device ${deviceConfig.host}`)),
                             ),
                         );
@@ -133,14 +122,15 @@ export class EsphomePlatform implements DynamicPlatformPlugin {
             const uuid = UUIDGen.generate(component.name);
             let newAccessory = false;
             let accessory: PlatformAccessory | undefined = this.accessories.find(
-                (accessory) => accessory.UUID === uuid,
+                (existingAccessory) => existingAccessory.UUID === uuid,
             );
             if (!accessory) {
                 this.logIfDebug(`${component.name} must be a new accessory`);
                 accessory = new Accessory(component.name, uuid);
                 newAccessory = true;
             }
-            if (!componentHelper(component, accessory)) {
+            const helperResult = componentHelper(component, accessory);
+            if (helperResult === false) {
                 this.log(`${component.name} could not be mapped to HomeKit. Please file an issue on Github.`);
                 if (!newAccessory) {
                     this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
@@ -148,13 +138,15 @@ export class EsphomePlatform implements DynamicPlatformPlugin {
                 continue;
             }
 
+            this.subscription.add(helperResult);
+
             this.log(`${component.name} discovered and setup.`);
-            if (accessory && newAccessory) {
+            if (newAccessory) {
                 this.accessories.push(accessory);
                 this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
             }
         }
-        this.logIfDebug(device.components);
+        this.logIfDebug(JSON.stringify(device.components));
     }
 
     public configureAccessory(accessory: PlatformAccessory): void {
@@ -167,11 +159,11 @@ export class EsphomePlatform implements DynamicPlatformPlugin {
         }
     }
 
-    private logIfDebug(msg?: any, ...parameters: unknown[]): void {
-        if (this.config.debug) {
-            this.log(msg, parameters);
+    private logIfDebug(msg: string, ...parameters: unknown[]): void {
+        if (this.options.debug) {
+            this.log(msg, ...parameters);
         } else {
-            this.log.debug(msg, parameters);
+            this.log.debug(msg, ...parameters);
         }
     }
 }
