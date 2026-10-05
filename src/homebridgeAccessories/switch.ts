@@ -19,6 +19,7 @@ export const switchHelper = (
             service: api.hap.Service.Switch,
             name: component.name,
             characteristic: api.hap.Characteristic.On,
+            read: () => component.status,
             apply: (value) => {
                 if (component.status !== !!value) {
                     if (value) {
