@@ -1,134 +1,72 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { API, Logging, PlatformAccessory } from 'homebridge';
-import { Subject } from 'rxjs';
+import { BehaviorSubject, distinctUntilChanged, shareReplay } from 'rxjs';
 
 import { applyConnectionStatus, watchDeviceConnection } from './connectionStatus.js';
+import {
+    assertCharacteristic,
+    makeFakeCharacteristicClass,
+    makeFakeServiceClass,
+    platformAccessoryWith,
+} from '../testing/hapFakes.js';
 
-const STATUS_ACTIVE_UUID = 'status-active-uuid';
-const ACCESSORY_INFORMATION_UUID = 'accessory-information-uuid';
+const StatusActiveCharacteristic = makeFakeCharacteristicClass('status-active-uuid');
+const AccessoryInformationService = makeFakeServiceClass('accessory-information-uuid');
 
-class FakeStatusActive {
-    public static readonly UUID = STATUS_ACTIVE_UUID;
-    public readonly UUID = STATUS_ACTIVE_UUID;
-    public value: boolean | undefined;
-
-    public setValue(value: boolean): void {
-        this.value = value;
-    }
-
-    /** Silent write, like real hap characteristics: updateValue never re-enters an onSet handler. */
-    public updateValue(value: boolean): void {
-        this.value = value;
-    }
-}
-
-class FakeAccessoryInformation {
-    public static readonly UUID = ACCESSORY_INFORMATION_UUID;
-    public readonly UUID = ACCESSORY_INFORMATION_UUID;
-}
-
-interface FakeService extends FakeServiceShape {
-    optionalCharacteristics: (typeof FakeStatusActive | typeof FakeAccessoryInformation)[];
-    autoAddedCharacteristics: FakeStatusActive[];
-}
-
-/**
- * Faithful model of real hap-nodejs Service behavior:
- * - `testCharacteristic(constructor)` is a pure class-aware existence check (no side effects).
- * - `getCharacteristic(constructor)` auto-adds the characteristic when it is missing but
- *   listed among the service's optional characteristics (mirroring the real "silent" add).
- *   Anything else is returned as undefined — production code must not rely on auto-add.
- */
-const makeFakeService = (
-    optionalCharacteristics: (typeof FakeStatusActive | typeof FakeAccessoryInformation)[] = [],
-    uuid = 'service-uuid',
-) => {
-    const service: FakeService = {
-        UUID: uuid,
-        characteristics: new Map(),
-        optionalCharacteristics,
-        autoAddedCharacteristics: [],
-        testCharacteristic(constructor) {
-            return service.characteristics.has(constructor.UUID);
-        },
-        getCharacteristic(constructor) {
-            const existing = service.characteristics.get(constructor.UUID);
-            if (existing) {
-                return existing;
-            }
-            if (service.optionalCharacteristics.some((option) => option.UUID === constructor.UUID)) {
-                const autoAdded = new (constructor as typeof FakeStatusActive)();
-                service.characteristics.set(autoAdded.UUID, autoAdded);
-                service.autoAddedCharacteristics.push(autoAdded);
-                return autoAdded;
-            }
-            return undefined;
-        },
-        addCharacteristic(characteristic) {
-            service.characteristics.set(characteristic.UUID, characteristic);
-            return characteristic;
-        },
-    };
-    return service;
+const ServiceClass = {
+    AccessoryInformation: AccessoryInformationService,
 };
 
-interface FakeServiceShape {
-    UUID: string;
-    characteristics: Map<string, FakeStatusActive>;
-    testCharacteristic: (constructor: typeof FakeStatusActive) => boolean;
-    getCharacteristic: (
-        constructor: typeof FakeStatusActive | typeof FakeAccessoryInformation,
-    ) => FakeStatusActive | undefined;
-    addCharacteristic: (characteristic: FakeStatusActive) => FakeStatusActive;
-}
+const CharacteristicClass = {
+    StatusActive: StatusActiveCharacteristic,
+};
+
+const SensorService = makeFakeServiceClass('sensor-service-uuid');
+const SecondFakeSensorService = makeFakeServiceClass('second-service-uuid');
 
 const createFakeApi = () =>
     ({
-        hap: {
-            Service: {
-                AccessoryInformation: FakeAccessoryInformation,
-            },
-            Characteristic: {
-                StatusActive: FakeStatusActive,
-            },
-        },
+        hap: { Service: ServiceClass, Characteristic: CharacteristicClass },
     }) as unknown as API;
 
-const platformAccessoryWith = (...services: FakeService[]): PlatformAccessory =>
-    ({ services }) as unknown as PlatformAccessory;
+const createFakeLogging = () => ({
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn(),
+});
 
 describe('applyConnectionStatus', () => {
     it('adds StatusActive where absent and sets it on every service of every accessory', () => {
         const api = createFakeApi();
-        const sensorService = makeFakeService();
-        const secondSensorService = makeFakeService();
+        const sensorService = new SensorService();
+        const secondSensorService = new SecondFakeSensorService();
         const accessory = platformAccessoryWith(sensorService, secondSensorService);
 
         applyConnectionStatus([accessory], false, api);
 
         for (const service of [sensorService, secondSensorService]) {
-            const characteristic = service.characteristics.get(STATUS_ACTIVE_UUID);
-            expect(characteristic).toBeInstanceOf(FakeStatusActive);
-            expect(characteristic?.value).toBe(false);
+            const characteristic = assertCharacteristic(service, StatusActiveCharacteristic);
+            expect(characteristic.value).toBe(false);
         }
     });
 
     it('skips AccessoryInformation services entirely', () => {
         const api = createFakeApi();
-        const infoService = makeFakeService([FakeAccessoryInformation], ACCESSORY_INFORMATION_UUID);
-        const sensorService = makeFakeService();
+        const infoService = new AccessoryInformationService('info');
+        const sensorService = new SensorService();
         const accessory = platformAccessoryWith(infoService, sensorService);
 
         applyConnectionStatus([accessory], false, api);
 
-        expect(infoService.testCharacteristic(FakeStatusActive)).toBe(false);
-        expect(infoService.characteristics.has(STATUS_ACTIVE_UUID)).toBe(false);
-        expect(sensorService.characteristics.get(STATUS_ACTIVE_UUID)?.value).toBe(false);
+        expect(infoService.testCharacteristic(StatusActiveCharacteristic)).toBe(false);
+        expect(infoService.characteristics.has('status-active-uuid')).toBe(false);
+        expect(assertCharacteristic(sensorService, StatusActiveCharacteristic).value).toBe(false);
     });
 
     it('goes through testCharacteristic/addCharacteristic instead of relying on getCharacteristic auto-add', () => {
         const api = createFakeApi();
-        const sensorService = makeFakeService();
+        const sensorService = new SensorService();
         const addSpy = vi.spyOn(sensorService, 'addCharacteristic');
         const accessory = platformAccessoryWith(sensorService);
 
@@ -138,14 +76,14 @@ describe('applyConnectionStatus', () => {
         // never auto-added by getCharacteristic or fetched back from it as undefined.
         expect(addSpy).toHaveBeenCalledTimes(1);
         expect(sensorService.autoAddedCharacteristics).toHaveLength(0);
-        expect(sensorService.characteristics.get(STATUS_ACTIVE_UUID)?.value).toBe(false);
+        expect(assertCharacteristic(sensorService, StatusActiveCharacteristic).value).toBe(false);
     });
 
     it('adds no second characteristic when StatusActive already exists', () => {
         const api = createFakeApi();
-        const sensorService = makeFakeService();
-        const existing = new FakeStatusActive();
-        sensorService.characteristics.set(STATUS_ACTIVE_UUID, existing);
+        const sensorService = new SensorService();
+        const existing = new StatusActiveCharacteristic();
+        sensorService.addCharacteristic(existing);
         const addSpy = vi.spyOn(sensorService, 'addCharacteristic');
         const accessory = platformAccessoryWith(sensorService);
 
@@ -165,8 +103,12 @@ describe('watchDeviceConnection', () => {
     const setup = () => {
         const log = createFakeLogging();
         const api = createFakeApi();
-        const alive$ = new Subject<boolean>();
-        const sensorService = makeFakeService();
+        // Faithful to esphome-ts v4: alive$ is distinctUntilChanged + shareReplay(1) over a merge whose
+        // connected$ source is a BehaviorSubject(false) — every subscriber synchronously receives the
+        // buffered false at subscribe time (esphome-ts dist/index.js:2494, 3277-3281).
+        const connected = new BehaviorSubject<boolean>(false);
+        const alive$ = connected.pipe(distinctUntilChanged(), shareReplay(1));
+        const sensorService = new SensorService();
         const accessories: PlatformAccessory[] = [platformAccessoryWith(sensorService)];
         const onStateChange = vi.fn();
 
@@ -175,77 +117,77 @@ describe('watchDeviceConnection', () => {
             onStateChange,
         });
 
-        return { subscription, alive$, log, sensorService, accessories, onStateChange };
+        return { subscription, connected, alive$, log, sensorService, accessories, onStateChange };
     };
 
     it('applies buffered initial offline state without logging a false alarm', () => {
-        // esphome-ts v4 buffers a `false` that every subscriber receives at subscribe time.
-        const { alive$, log, sensorService, onStateChange } = setup();
-
-        alive$.next(false);
+        // No manual push: the buffered `false` arrives on its own at subscribe time.
+        const { connected, log, sensorService, onStateChange } = setup();
 
         expect(log.warn).not.toHaveBeenCalled();
         expect(log.info).not.toHaveBeenCalled();
         expect(onStateChange).toHaveBeenCalledWith(false);
-        expect(sensorService.characteristics.get(STATUS_ACTIVE_UUID)?.value).toBe(false);
+        expect(assertCharacteristic(sensorService, StatusActiveCharacteristic).value).toBe(false);
+
+        // distinctUntilChanged dedupes a repeated offline emission into the buffered one.
+        connected.next(false);
+        expect(onStateChange).toHaveBeenCalledTimes(1);
     });
 
     it('logs a warning and marks all services inactive on connection loss after being connected', () => {
-        const { alive$, log, sensorService, onStateChange } = setup();
+        const { connected, log, sensorService, onStateChange } = setup();
 
-        alive$.next(true); // first connection: state recorded, no log lines
-        alive$.next(false);
+        connected.next(true); // first connection: state recorded, no log lines
+        connected.next(false);
 
         expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('esp-device.local'));
         expect(log.info).not.toHaveBeenCalled();
-        expect(sensorService.characteristics.get(STATUS_ACTIVE_UUID)?.value).toBe(false);
-        expect(onStateChange).toHaveBeenNthCalledWith(2, false);
+        expect(assertCharacteristic(sensorService, StatusActiveCharacteristic).value).toBe(false);
+        // buffered false (n=1), true (n=2), false (n=3)
+        expect(onStateChange).toHaveBeenNthCalledWith(3, false);
     });
 
     it('logs info and reactivates services on reconnect', () => {
-        const { alive$, log, sensorService } = setup();
+        const { connected, log, sensorService } = setup();
 
-        alive$.next(true);
-        alive$.next(false);
-        alive$.next(true);
+        connected.next(true);
+        connected.next(false);
+        connected.next(true);
 
         expect(log.info).toHaveBeenCalledWith(expect.stringContaining('re-established'));
         expect(log.warn).toHaveBeenCalledTimes(1);
-        expect(sensorService.characteristics.get(STATUS_ACTIVE_UUID)?.value).toBe(true);
+        expect(assertCharacteristic(sensorService, StatusActiveCharacteristic).value).toBe(true);
     });
 
     it('deduplicates consecutive identical states', () => {
-        const { alive$, log, onStateChange } = setup();
+        const { connected, log, onStateChange } = setup();
 
-        alive$.next(true);
-        alive$.next(false);
-        alive$.next(false);
-        alive$.next(false);
+        connected.next(true);
+        connected.next(false);
+        connected.next(false);
+        connected.next(false);
 
         expect(log.warn).toHaveBeenCalledTimes(1);
-        expect(onStateChange).toHaveBeenCalledTimes(2);
+        // buffered false + true + false — the repeated falses are deduplicated.
+        expect(onStateChange).toHaveBeenCalledTimes(3);
     });
 
     it('re-evaluates the accessory lookup on every state change', () => {
-        const { alive$, log, accessories, sensorService } = setup();
+        const { connected, log, accessories } = setup();
 
-        // Device goes offline before its accessories were attached...
+        // Device goes offline with no accessories attached...
         accessories.splice(0, accessories.length);
-        alive$.next(true);
-        alive$.next(false);
+        connected.next(true);
+        connected.next(false);
         expect(log.warn).toHaveBeenCalledTimes(1);
-        expect(sensorService.testCharacteristic(FakeStatusActive)).toBe(false);
 
-        // ...and comes back online after the accessories have been added.
-        accessories.push(platformAccessoryWith(sensorService));
-        alive$.next(true);
-        expect(sensorService.characteristics.get(STATUS_ACTIVE_UUID)?.value).toBe(true);
+        // ...and comes back online after a NEW accessory has been added late: the lookup is
+        // re-evaluated per state change, so the late service gets its StatusActive written.
+        const lateService = new SensorService();
+        accessories.push(platformAccessoryWith(lateService));
+        connected.next(true);
+
+        expect(lateService.testCharacteristic(StatusActiveCharacteristic)).toBe(true);
+        expect(lateService.getCharacteristic(StatusActiveCharacteristic).value).toBe(true);
     });
-});
-
-const createFakeLogging = () => ({
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-    debug: vi.fn(),
 });

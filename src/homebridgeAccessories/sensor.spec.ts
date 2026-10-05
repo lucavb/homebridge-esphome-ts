@@ -4,72 +4,27 @@ import { Subject } from 'rxjs';
 import type { SensorComponent } from 'esphome-ts';
 
 import { sensorHelper } from './sensor.js';
+import { assertCharacteristic, makeFakeCharacteristicClass, makeFakeServiceClass } from '../testing/hapFakes.js';
+import type { FakeHapService } from '../testing/hapFakes.js';
 
-interface FakeCharacteristic {
-    value: number | undefined;
-    setValue: (value: number) => void;
-    updateValue: (value: number) => void;
-}
+const CurrentTemperatureCharacteristic = makeFakeCharacteristicClass('current-temperature');
+const CurrentRelativeHumidityCharacteristic = makeFakeCharacteristicClass('current-relative-humidity');
+const CurrentAmbientLightLevelCharacteristic = makeFakeCharacteristicClass('current-ambient-light-level');
 
-const createFakeCharacteristic = (): FakeCharacteristic => {
-    const characteristic: FakeCharacteristic & Record<string, unknown> = {
-        value: undefined,
-        setValue(value) {
-            characteristic.value = value;
-        },
-        updateValue(value) {
-            characteristic.value = value;
-        },
-    };
-    return characteristic;
-};
-
-interface FakeServiceInstance {
-    UUID: string;
-    characteristics: Map<string, FakeCharacteristic>;
-    getCharacteristic: (key: string) => FakeCharacteristic | undefined;
-}
-
-/** Runtime stand-in for `api.hap.Service` (a namespace object whose props are service constructor classes). */
-const makeFakeServiceClass = (uuid: string, characteristicKeys: string[]) => {
-    class FakeService implements FakeServiceInstance {
-        public static readonly UUID = uuid;
-        public readonly UUID = uuid;
-        public readonly name: string;
-        public readonly subtype: string;
-        public readonly characteristics: Map<string, FakeCharacteristic>;
-
-        public constructor(name: string, subtype: string) {
-            this.name = name;
-            this.subtype = subtype;
-            // Real hap-nodejs services expose their mandatory characteristics right after creation.
-            this.characteristics = new Map(characteristicKeys.map((key) => [key, createFakeCharacteristic()]));
-        }
-
-        public getCharacteristic(key: string): FakeCharacteristic | undefined {
-            return this.characteristics.get(key);
-        }
-    }
-    return FakeService;
-};
-
-const TEMPERATURE_SERVICE_UUID = 'temperature-service-uuid';
-const HUMIDITY_SERVICE_UUID = 'humidity-service-uuid';
-const LIGHT_SENSOR_SERVICE_UUID = 'light-sensor-service-uuid';
-const TEMP_CHARACTERISTIC_KEY = 'current-temperature';
-const HUMIDITY_CHARACTERISTIC_KEY = 'current-relative-humidity';
-const AMBIENT_LIGHT_CHARACTERISTIC_KEY = 'current-ambient-light-level';
+const TemperatureSensorService = makeFakeServiceClass('temperature-service-uuid', [CurrentTemperatureCharacteristic]);
+const HumiditySensorService = makeFakeServiceClass('humidity-service-uuid', [CurrentRelativeHumidityCharacteristic]);
+const LightSensorService = makeFakeServiceClass('light-sensor-service-uuid', [CurrentAmbientLightLevelCharacteristic]);
 
 const ServiceClass = {
-    TemperatureSensor: makeFakeServiceClass(TEMPERATURE_SERVICE_UUID, [TEMP_CHARACTERISTIC_KEY]),
-    HumiditySensor: makeFakeServiceClass(HUMIDITY_SERVICE_UUID, [HUMIDITY_CHARACTERISTIC_KEY]),
-    LightSensor: makeFakeServiceClass(LIGHT_SENSOR_SERVICE_UUID, [AMBIENT_LIGHT_CHARACTERISTIC_KEY]),
+    TemperatureSensor: TemperatureSensorService,
+    HumiditySensor: HumiditySensorService,
+    LightSensor: LightSensorService,
 };
 
 const CharacteristicClass = {
-    CurrentTemperature: TEMP_CHARACTERISTIC_KEY,
-    CurrentRelativeHumidity: HUMIDITY_CHARACTERISTIC_KEY,
-    CurrentAmbientLightLevel: AMBIENT_LIGHT_CHARACTERISTIC_KEY,
+    CurrentTemperature: CurrentTemperatureCharacteristic,
+    CurrentRelativeHumidity: CurrentRelativeHumidityCharacteristic,
+    CurrentAmbientLightLevel: CurrentAmbientLightLevelCharacteristic,
 };
 
 const createFakeApi = () =>
@@ -78,10 +33,10 @@ const createFakeApi = () =>
     }) as unknown as API;
 
 const createFakeAccessory = () => {
-    const context = { services: [] as FakeServiceInstance[] };
+    const context = { services: [] as FakeHapService[] };
     const accessory = {
         services: context.services,
-        addService(service: FakeServiceInstance): FakeServiceInstance {
+        addService(service: FakeHapService): FakeHapService {
             context.services.push(service);
             return service;
         },
@@ -109,15 +64,6 @@ const createFakeSensorComponent = (
     };
 };
 
-/** Returns the characteristic that received pushes for the given key. */
-const characteristicOf = (services: FakeServiceInstance[], key: string): FakeCharacteristic => {
-    const characteristic = services[0]?.characteristics.get(key);
-    if (!characteristic) {
-        throw new Error(`characteristic ${key} not found`);
-    }
-    return characteristic;
-};
-
 describe('sensorHelper', () => {
     it('returns false for unsupported sensors', () => {
         const { component } = createFakeSensorComponent({ unitOfMeasurement: 'V' });
@@ -132,11 +78,11 @@ describe('sensorHelper', () => {
         expect(sensorHelper(component, accessory, createFakeApi())).toBe(true);
 
         expect(context.services).toHaveLength(1);
-        expect(context.services[0]).toHaveProperty('UUID', LIGHT_SENSOR_SERVICE_UUID);
+        expect(context.services[0]).toHaveProperty('UUID', 'light-sensor-service-uuid');
 
         raw.value = 123.45;
         state$.next({});
-        expect(characteristicOf(context.services, AMBIENT_LIGHT_CHARACTERISTIC_KEY).value).toBe(123.45);
+        expect(assertCharacteristic(context.services[0], CurrentAmbientLightLevelCharacteristic).value).toBe(123.45);
     });
 
     it('maps an illuminance deviceClass onto the LightSensor as well', () => {
@@ -144,36 +90,40 @@ describe('sensorHelper', () => {
         const { accessory, context } = createFakeAccessory();
 
         expect(sensorHelper(component, accessory, createFakeApi())).toBe(true);
-        expect(context.services[0]).toHaveProperty('UUID', LIGHT_SENSOR_SERVICE_UUID);
+        expect(context.services[0]).toHaveProperty('UUID', 'light-sensor-service-uuid');
 
         raw.value = 42;
         state$.next({});
-        expect(characteristicOf(context.services, AMBIENT_LIGHT_CHARACTERISTIC_KEY).value).toBe(42);
+        expect(assertCharacteristic(context.services[0], CurrentAmbientLightLevelCharacteristic).value).toBe(42);
     });
 
     it('clamps out-of-range lux into the valid characteristic range', () => {
         const zeroLux = createFakeSensorComponent();
-        const zeroContext = createFakeAccessory();
-        sensorHelper(zeroLux.component, zeroContext.accessory, createFakeApi());
+        const zeroAccessory = createFakeAccessory();
+        sensorHelper(zeroLux.component, zeroAccessory.accessory, createFakeApi());
         zeroLux.raw.value = 0;
         zeroLux.state$.next({});
-        expect(characteristicOf(zeroContext.context.services, AMBIENT_LIGHT_CHARACTERISTIC_KEY).value).toBe(0.0001);
+        expect(
+            assertCharacteristic(zeroAccessory.context.services[0], CurrentAmbientLightLevelCharacteristic).value,
+        ).toBe(0.0001);
 
         const negativeLux = createFakeSensorComponent();
-        const negativeContext = createFakeAccessory();
-        sensorHelper(negativeLux.component, negativeContext.accessory, createFakeApi());
+        const negativeAccessory = createFakeAccessory();
+        sensorHelper(negativeLux.component, negativeAccessory.accessory, createFakeApi());
         negativeLux.raw.value = -5;
         negativeLux.state$.next({});
-        expect(characteristicOf(negativeContext.context.services, AMBIENT_LIGHT_CHARACTERISTIC_KEY).value).toBe(0.0001);
+        expect(
+            assertCharacteristic(negativeAccessory.context.services[0], CurrentAmbientLightLevelCharacteristic).value,
+        ).toBe(0.0001);
 
         const blindingLux = createFakeSensorComponent();
-        const blindingContext = createFakeAccessory();
-        sensorHelper(blindingLux.component, blindingContext.accessory, createFakeApi());
+        const blindingAccessory = createFakeAccessory();
+        sensorHelper(blindingLux.component, blindingAccessory.accessory, createFakeApi());
         blindingLux.raw.value = 999_999;
         blindingLux.state$.next({});
-        expect(characteristicOf(blindingContext.context.services, AMBIENT_LIGHT_CHARACTERISTIC_KEY).value).toBe(
-            100_000,
-        );
+        expect(
+            assertCharacteristic(blindingAccessory.context.services[0], CurrentAmbientLightLevelCharacteristic).value,
+        ).toBe(100_000);
     });
 
     it('skips pushing while no measurement is available', () => {
@@ -183,7 +133,7 @@ describe('sensorHelper', () => {
         sensorHelper(component, accessory, createFakeApi());
         state$.next({});
 
-        expect(characteristicOf(context.services, AMBIENT_LIGHT_CHARACTERISTIC_KEY).value).toBeUndefined();
+        expect(assertCharacteristic(context.services[0], CurrentAmbientLightLevelCharacteristic).value).toBeUndefined();
     });
 
     it('keeps the fahrenheit temperature path intact', () => {
@@ -191,11 +141,11 @@ describe('sensorHelper', () => {
         const { accessory, context } = createFakeAccessory();
 
         expect(sensorHelper(component, accessory, createFakeApi())).toBe(true);
-        expect(context.services[0]).toHaveProperty('UUID', TEMPERATURE_SERVICE_UUID);
+        expect(context.services[0]).toHaveProperty('UUID', 'temperature-service-uuid');
 
         raw.value = 68;
         state$.next({});
         // (68 - 32) * 5 / 9 = 20 °C
-        expect(characteristicOf(context.services, TEMP_CHARACTERISTIC_KEY).value).toBeCloseTo(20);
+        expect(assertCharacteristic(context.services[0], CurrentTemperatureCharacteristic).value).toBeCloseTo(20);
     });
 });
