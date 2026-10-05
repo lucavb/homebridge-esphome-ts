@@ -63,6 +63,9 @@ export const lightHelper = (
                 apply: (saturation) => {
                     if (typeof saturation === 'number') {
                         lastSat = saturation;
+                        const hsv = component.hsv;
+                        hsv.saturation = saturation;
+                        component.hsv = hsv;
                     }
                 },
                 project: () => component.hsv.saturation,
