@@ -4,6 +4,6 @@
         "noEmit": true,
         "rootDir": "."
     },
-    "include": ["src", "vitest.config.ts"],
+    "include": ["src", "vitest.config.ts", "eslint.config.mts"],
     "exclude": ["dist", "node_modules"]
 }
