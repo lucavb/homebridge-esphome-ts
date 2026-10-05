@@ -1,11 +1,11 @@
 import { API, DynamicPlatformPlugin, Logging, PlatformAccessory, PlatformConfig } from 'homebridge';
-import { concat, from, interval, Observable, of, Subscription } from 'rxjs';
-import { catchError, filter, map, mergeMap, take, tap, timeout } from 'rxjs/operators';
-import { componentHelpers } from './homebridgeAccessories/componentHelpers';
-import { Accessory, PLATFORM_NAME, PLUGIN_NAME, UUIDGen } from './index';
-import { writeReadDataToLogFile } from './shared';
+import { concat, from, interval, Observable, EMPTY, Subscription } from 'rxjs';
+import { TimeoutError, catchError, filter, map, mergeMap, take, tap, timeout } from 'rxjs';
+import { componentHelpers } from './homebridgeAccessories/componentHelpers.js';
+import { PLATFORM_NAME, PLUGIN_NAME } from './constants.js';
+import { writeReadDataToLogFile } from './shared/index.js';
 import { EspDevice } from 'esphome-ts';
-import { discoverDevices } from './discovery';
+import { discoverDevices } from './discovery.js';
 
 interface IEsphomeDeviceConfig {
     host: string;
@@ -104,12 +104,12 @@ export class EsphomePlatform implements DynamicPlatformPlugin {
                             timeout(10 * 1000),
                             tap(() => this.addAccessories(device)),
                             catchError((err) => {
-                                if (err.name === 'TimeoutError') {
+                                if (err instanceof TimeoutError) {
                                     this.log.warn(
                                         `The device under the host ${deviceConfig.host} could not be reached.`,
                                     );
                                 }
-                                return of(err);
+                                return EMPTY;
                             }),
                         );
                     }),
@@ -130,17 +130,17 @@ export class EsphomePlatform implements DynamicPlatformPlugin {
                 this.log(`${component.name} is currently not supported. You might want to file an issue on Github.`);
                 continue;
             }
-            const uuid = UUIDGen.generate(component.name);
+            const uuid = this.api.hap.uuid.generate(component.name);
             let newAccessory = false;
             let accessory: PlatformAccessory | undefined = this.accessories.find(
                 (accessory) => accessory.UUID === uuid,
             );
             if (!accessory) {
                 this.logIfDebug(`${component.name} must be a new accessory`);
-                accessory = new Accessory(component.name, uuid);
+                accessory = new this.api.platformAccessory(component.name, uuid);
                 newAccessory = true;
             }
-            if (!componentHelper(component, accessory)) {
+            if (!componentHelper(component, accessory, this.api)) {
                 this.log(`${component.name} could not be mapped to HomeKit. Please file an issue on Github.`);
                 if (!newAccessory) {
                     this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
@@ -167,6 +167,7 @@ export class EsphomePlatform implements DynamicPlatformPlugin {
         }
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- kept from the original logging contract
     private logIfDebug(msg?: any, ...parameters: unknown[]): void {
         if (this.config.debug) {
             this.log(msg, parameters);

@@ -1,14 +1,10 @@
-import { CharacteristicEventTypes, CharacteristicGetCallback } from 'hap-nodejs';
-import { tap } from 'rxjs/operators';
-import { BinarySensorComponent, BinarySensorTypes } from 'esphome-ts';
-import { Characteristic, Service } from '../index';
-import { PlatformAccessory } from 'homebridge';
+import { tap } from 'rxjs';
+import type { API, Characteristic, PlatformAccessory, Service } from 'homebridge';
+import { BinarySensorTypes } from 'esphome-ts';
+import type { BinarySensorComponent } from 'esphome-ts';
 
 type SupportedServices =
-    | typeof Service.MotionSensor
-    | typeof Service.LeakSensor
-    | typeof Service.ContactSensor
-    | typeof Service.SmokeSensor;
+    typeof Service.MotionSensor | typeof Service.LeakSensor | typeof Service.ContactSensor | typeof Service.SmokeSensor;
 type SupportedCharacteristics =
     | typeof Characteristic.MotionDetected
     | typeof Characteristic.ContactSensorState
@@ -20,48 +16,53 @@ interface BinarySensorHomekit {
     service: SupportedServices;
 }
 
-const map = (): Map<BinarySensorTypes, BinarySensorHomekit> => {
+const map = (api: API): Map<BinarySensorTypes, BinarySensorHomekit> => {
+    const { Characteristic: CharacteristicClass, Service: ServiceClass } = api.hap;
     return new Map<BinarySensorTypes, BinarySensorHomekit>([
         [
             BinarySensorTypes.MOTION,
             {
-                characteristic: Characteristic.MotionDetected,
-                service: Service.MotionSensor,
+                characteristic: CharacteristicClass.MotionDetected,
+                service: ServiceClass.MotionSensor,
             },
         ],
         [
             BinarySensorTypes.WINDOW,
             {
-                characteristic: Characteristic.ContactSensorState,
-                service: Service.ContactSensor,
+                characteristic: CharacteristicClass.ContactSensorState,
+                service: ServiceClass.ContactSensor,
             },
         ],
         [
             BinarySensorTypes.DOOR,
             {
-                characteristic: Characteristic.ContactSensorState,
-                service: Service.ContactSensor,
+                characteristic: CharacteristicClass.ContactSensorState,
+                service: ServiceClass.ContactSensor,
             },
         ],
         [
             BinarySensorTypes.SMOKE,
             {
-                characteristic: Characteristic.SmokeDetected,
-                service: Service.SmokeSensor,
+                characteristic: CharacteristicClass.SmokeDetected,
+                service: ServiceClass.SmokeSensor,
             },
         ],
         [
             BinarySensorTypes.MOISTURE,
             {
-                characteristic: Characteristic.LeakDetected,
-                service: Service.LeakSensor,
+                characteristic: CharacteristicClass.LeakDetected,
+                service: ServiceClass.LeakSensor,
             },
         ],
     ]);
 };
 
-export const binarySensorHelper = (component: BinarySensorComponent, accessory: PlatformAccessory): boolean => {
-    const homekitStuff = map().get(component.deviceClass);
+export const binarySensorHelper = (
+    component: BinarySensorComponent,
+    accessory: PlatformAccessory,
+    api: API,
+): boolean => {
+    const homekitStuff = map(api).get(component.deviceClass);
 
     if (homekitStuff) {
         const ServiceConstructor = homekitStuff?.service;
@@ -70,11 +71,7 @@ export const binarySensorHelper = (component: BinarySensorComponent, accessory: 
             service = accessory.addService(new ServiceConstructor(component.name, ''));
         }
 
-        service
-            .getCharacteristic(homekitStuff.characteristic)
-            ?.on(CharacteristicEventTypes.GET, (callback: CharacteristicGetCallback) => {
-                callback(null, component.status);
-            });
+        service.getCharacteristic(homekitStuff.characteristic)?.onGet(async () => component.status);
 
         component.state$
             .pipe(

@@ -1,7 +1,6 @@
-import { tap } from 'rxjs/operators';
-import { Characteristic, Service } from '../index';
-import { SensorComponent } from 'esphome-ts';
-import { PlatformAccessory, Service as HAPService } from 'homebridge';
+import { tap } from 'rxjs';
+import type { API, Characteristic, PlatformAccessory, Service } from 'homebridge';
+import type { SensorComponent } from 'esphome-ts';
 
 const fahrenheitUnit = '°F';
 
@@ -10,15 +9,16 @@ const isTemperatureComponent = (unitOfMeasurement: unknown) =>
 
 const fahrenheitToCelsius = (fahrenheit: number): number => ((fahrenheit - 32) * 5) / 9;
 
-export const sensorHelper = (component: SensorComponent, accessory: PlatformAccessory): boolean => {
+export const sensorHelper = (component: SensorComponent, accessory: PlatformAccessory, api: API): boolean => {
+    const { Characteristic: CharacteristicClass, Service: ServiceClass } = api.hap;
     if (isTemperatureComponent(component.unitOfMeasurement)) {
-        defaultSetup(component, accessory, Service.TemperatureSensor, Characteristic.CurrentTemperature);
+        defaultSetup(component, accessory, ServiceClass.TemperatureSensor, CharacteristicClass.CurrentTemperature);
         return true;
     } else if (
         component.unitOfMeasurement === '%' &&
         (component.icon === 'mdi:water-percent' || component.deviceClass === 'humidity')
     ) {
-        defaultSetup(component, accessory, Service.HumiditySensor, Characteristic.CurrentRelativeHumidity);
+        defaultSetup(component, accessory, ServiceClass.HumiditySensor, CharacteristicClass.CurrentRelativeHumidity);
         return true;
     }
     return false;
@@ -30,7 +30,7 @@ const defaultSetup = (
     SelectedService: typeof Service.TemperatureSensor | typeof Service.HumiditySensor,
     SelectedCharacteristic: typeof Characteristic.CurrentTemperature | typeof Characteristic.CurrentRelativeHumidity,
 ): void => {
-    let temperatureSensor: HAPService | undefined = accessory.services.find(
+    let temperatureSensor: InstanceType<typeof SelectedService> | undefined = accessory.services.find(
         (service) => service.UUID === SelectedService.UUID,
     );
     if (!temperatureSensor) {
@@ -45,7 +45,11 @@ const defaultSetup = (
                     valuesAreFahrenheit && component.value !== undefined
                         ? fahrenheitToCelsius(component.value)
                         : component.value;
-                temperatureSensor?.getCharacteristic(SelectedCharacteristic)?.setValue(celsiusValue!);
+                if (celsiusValue === undefined) {
+                    // No measurement yet; silently skip so a throw cannot kill the state$ subscription.
+                    return;
+                }
+                temperatureSensor?.getCharacteristic(SelectedCharacteristic)?.setValue(celsiusValue);
             }),
         )
         .subscribe();

@@ -55,11 +55,7 @@
             "items": [
                 {
                     "key": "devices",
-                    "items": [
-                        "devices[].host",
-                        "devices[].port",
-                        "devices[].password"
-                    ]
+                    "items": ["devices[].host", "devices[].port", "devices[].password"]
                 }
             ]
         },

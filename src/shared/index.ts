@@ -1,2 +1,2 @@
-export * from './debug';
-export * from './typeguards';
+export * from './debug.js';
+export * from './typeguards.js';

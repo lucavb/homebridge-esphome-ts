@@ -1,76 +1,78 @@
-import { tap } from 'rxjs/operators';
-import {
-    CharacteristicEventTypes,
-    CharacteristicSetCallback,
-    CharacteristicValue,
-    PlatformAccessory,
-    Service as HAPService,
-} from 'homebridge';
-import { Characteristic, Service } from '../index';
-import { ComponentHelper } from './componentHelpers';
-import { DEFAULT_NO_EFFECT, LightComponent, LightStateEvent } from 'esphome-ts';
+import { tap } from 'rxjs';
+import type { API, CharacteristicValue, PlatformAccessory, Service as HAPService } from 'homebridge';
+import { HAPStatus } from 'homebridge';
+import type { LightComponent, LightStateEvent } from 'esphome-ts';
+import { DEFAULT_NO_EFFECT } from 'esphome-ts';
 
-export const lightHelper: ComponentHelper = (component: LightComponent, accessory: PlatformAccessory): boolean => {
+export const lightHelper = (component: LightComponent, accessory: PlatformAccessory, api: API): boolean => {
+    const { Characteristic: CharacteristicClass, Service } = api.hap;
     let lightBulbService: HAPService | undefined = accessory.services.find(
         (service: HAPService) => service.UUID === Service.Lightbulb.UUID,
     );
     if (!lightBulbService) {
         lightBulbService = accessory.addService(new Service.Lightbulb(component.name, ''));
     }
+    const bulbService = lightBulbService;
 
     if (component.supportsRgb) {
         let lastHue: number | undefined;
         let lastSat: number | undefined;
-        lightBulbService
-            .getCharacteristic(Characteristic.Hue)
-            ?.on(CharacteristicEventTypes.SET, (hue: CharacteristicValue, callback: CharacteristicSetCallback) => {
+        lightBulbService.getCharacteristic(CharacteristicClass.Hue)?.onSet(async (hue: CharacteristicValue) => {
+            try {
                 lastHue = hue as number;
                 const hsv = component.hsv;
                 hsv.hue = lastHue ?? 0;
                 hsv.saturation = lastSat ?? 0;
                 component.hsv = hsv;
-                callback();
+            } catch {
+                throw new api.hap.HapStatusError(HAPStatus.SERVICE_COMMUNICATION_FAILURE);
+            }
+        });
+        lightBulbService
+            .getCharacteristic(CharacteristicClass.Saturation)
+            ?.onSet(async (saturation: CharacteristicValue) => {
+                try {
+                    lastSat = saturation as number;
+                } catch {
+                    throw new api.hap.HapStatusError(HAPStatus.SERVICE_COMMUNICATION_FAILURE);
+                }
             });
         lightBulbService
-            .getCharacteristic(Characteristic.Saturation)
-            ?.on(
-                CharacteristicEventTypes.SET,
-                (saturation: CharacteristicValue, callback: CharacteristicSetCallback) => {
-                    lastSat = saturation as number;
-                    callback();
-                },
-            );
-        lightBulbService
-            .getCharacteristic(Characteristic.Brightness)
-            ?.on(
-                CharacteristicEventTypes.SET,
-                (brightness: CharacteristicValue, callback: CharacteristicSetCallback) => {
+            .getCharacteristic(CharacteristicClass.Brightness)
+            ?.onSet(async (brightness: CharacteristicValue) => {
+                try {
                     const hsv = component.hsv;
                     hsv.value = brightness as number;
                     component.hsv = hsv;
-                    callback();
-                },
-            );
+                } catch {
+                    throw new api.hap.HapStatusError(HAPStatus.SERVICE_COMMUNICATION_FAILURE);
+                }
+            });
     } else if (component.supportsBrightness) {
         lightBulbService
-            .getCharacteristic(Characteristic.Brightness)
-            ?.on(
-                CharacteristicEventTypes.SET,
-                (brightness: CharacteristicValue, callback: CharacteristicSetCallback) => {
+            .getCharacteristic(CharacteristicClass.Brightness)
+            ?.onSet(async (brightness: CharacteristicValue) => {
+                try {
                     if (typeof brightness === 'number') {
                         component.setBrightness(brightness);
                     }
-                    callback();
-                },
-            );
+                } catch {
+                    throw new api.hap.HapStatusError(HAPStatus.SERVICE_COMMUNICATION_FAILURE);
+                }
+            });
     }
 
-    lightBulbService
-        .getCharacteristic(Characteristic.On)
-        ?.on(CharacteristicEventTypes.SET, (on: CharacteristicValue, callback: CharacteristicSetCallback) => {
-            !!on ? component.turnOn() : component.turnOff();
-            callback();
-        });
+    lightBulbService.getCharacteristic(CharacteristicClass.On)?.onSet(async (on: CharacteristicValue) => {
+        try {
+            if (on) {
+                component.turnOn();
+            } else {
+                component.turnOff();
+            }
+        } catch {
+            throw new api.hap.HapStatusError(HAPStatus.SERVICE_COMMUNICATION_FAILURE);
+        }
+    });
 
     const effects = component
         .availableEffects()
@@ -92,37 +94,40 @@ export const lightHelper: ComponentHelper = (component: LightComponent, accessor
 
     if (effects.length > 0) {
         effects.forEach(({ name, service }): void => {
-            service
-                ?.getCharacteristic(Characteristic.On)
-                ?.on(CharacteristicEventTypes.SET, (on: CharacteristicValue, callback: CharacteristicSetCallback) => {
+            service?.getCharacteristic(CharacteristicClass.On)?.onSet(async (on: CharacteristicValue) => {
+                try {
                     component.effect = on ? name : DEFAULT_NO_EFFECT;
                     effects
                         .filter(({ name: otherEffectName }) => otherEffectName !== name)
                         .forEach(({ service: otherEffectService }) => {
-                            otherEffectService?.getCharacteristic(Characteristic.On).updateValue(false);
+                            otherEffectService?.getCharacteristic(CharacteristicClass.On).updateValue(false);
                         });
-                    callback();
-                });
+                } catch {
+                    throw new api.hap.HapStatusError(HAPStatus.SERVICE_COMMUNICATION_FAILURE);
+                }
+            });
         });
     }
 
     component.state$
         .pipe(
             tap((state: LightStateEvent) => {
-                lightBulbService!.getCharacteristic(Characteristic.On)?.updateValue(!!state.state);
+                bulbService.getCharacteristic(CharacteristicClass.On)?.updateValue(!!state.state);
                 if (component.supportsRgb) {
                     const hsv = component.hsv;
-                    lightBulbService!.getCharacteristic(Characteristic.Hue)?.updateValue(hsv.hue);
-                    lightBulbService!.getCharacteristic(Characteristic.Saturation)?.updateValue(hsv.saturation);
-                    lightBulbService!.getCharacteristic(Characteristic.Brightness)?.updateValue(hsv.value);
+                    bulbService.getCharacteristic(CharacteristicClass.Hue)?.updateValue(hsv.hue);
+                    bulbService.getCharacteristic(CharacteristicClass.Saturation)?.updateValue(hsv.saturation);
+                    bulbService.getCharacteristic(CharacteristicClass.Brightness)?.updateValue(hsv.value);
                 } else if (component.supportsBrightness) {
-                    lightBulbService!
-                        .getCharacteristic(Characteristic.Brightness)
+                    bulbService
+                        .getCharacteristic(CharacteristicClass.Brightness)
                         ?.updateValue((state.brightness ?? 0) * 100);
                 }
                 if (effects.length > 0) {
                     effects.forEach(({ name: effectName, service: effectService }): void => {
-                        effectService?.getCharacteristic(Characteristic.On)?.updateValue(effectName === state.effect);
+                        effectService
+                            ?.getCharacteristic(CharacteristicClass.On)
+                            ?.updateValue(effectName === state.effect);
                     });
                 }
             }),

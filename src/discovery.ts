@@ -1,10 +1,8 @@
 import Bonjour, { BonjourService } from 'bonjour-hap';
 import { Logging } from 'homebridge';
-import ip from 'ip';
+import { isIPv4, isIPv6 } from 'node:net';
 import { Observable } from 'rxjs';
-import { map } from 'rxjs/operators';
-
-const bonjour = new Bonjour();
+import { map } from 'rxjs';
 
 const DEFAULT_PORT = 6053;
 
@@ -15,6 +13,7 @@ interface DiscoveryResult {
 }
 
 export const discoverDevices = (timeout: number, log: Logging): Observable<DiscoveryResult> => {
+    const bonjour = new Bonjour();
     return new Observable<BonjourService>((subscriber) => {
         const browser = bonjour.find({ type: 'esphomelib' }, (service) => {
             subscriber.next(service);
@@ -27,7 +26,7 @@ export const discoverDevices = (timeout: number, log: Logging): Observable<Disco
         map((findResult: BonjourService) => {
             log.info('HAP Device discovered', findResult.name);
             const address = findResult.addresses.find((addr) => {
-                return (ip.isV4Format(addr) && addr.substring(0, 7) !== '169.254') || ip.isV6Format(addr);
+                return (isIPv4(addr) && addr.substring(0, 7) !== '169.254') || isIPv6(addr);
             });
             const port = findResult.port && findResult.port !== DEFAULT_PORT ? findResult.port : undefined;
             return {

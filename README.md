@@ -6,13 +6,18 @@ so that you can expect instant updates for all your binary sensors what have you
 
 Supported components include:
 
--   Lights
--   Switches
--   BinarySensors (motion, window, door, smoke and leakage)
--   Sensors (temperature & humidity at the moment)
+- Lights
+- Switches
+- BinarySensors (motion, window, door, smoke and leakage)
+- Sensors (temperature & humidity at the moment)
 
 This project is currently still in beta, but I thought that many eyes see more than just
 my two :)
+
+## Requirements
+
+- Node.js >= 22.12
+- Homebridge ^1.6.0 or ^2.0.0
 
 ## Installation
 
@@ -79,9 +84,9 @@ add a key containing its name (as it was defined in esphome and is shown initial
 
 ## Todo
 
--   [x] Implement a blacklist for components
--   [ ] Testing, especially with the new homebridge version
--   [x] Implement sensor component
+- [x] Implement a blacklist for components
+- [x] Testing, especially with the new homebridge version
+- [x] Implement sensor component
 
 ## Troubleshooting
 

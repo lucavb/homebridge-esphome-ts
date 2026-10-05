@@ -44,3 +44,6 @@ yarn.lock
 examples/persist
 examples/accessories
 
+# Deepwork session state
+.slim/deepwork/
+
