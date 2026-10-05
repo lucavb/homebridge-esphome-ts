@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { API, CharacteristicValue } from 'homebridge';
-import { BehaviorSubject, filter, Subject, type Observable } from 'rxjs';
+import { BehaviorSubject, filter, type Observable } from 'rxjs';
 import type { BaseComponent } from 'esphome-ts';
 import { ok } from 'node:assert/strict';
 
@@ -143,7 +143,7 @@ describe('bindComponent', () => {
         expect(context.services[1].name).toBe('different effect switch');
     });
 
-    it('pushes projected state on state$ emissions with setValue', () => {
+    it('pushes projected state on state$ emissions with updateValue', () => {
         const { component, state } = createFakeComponent();
         const { accessory, context } = createFakeAccessory();
 
@@ -313,8 +313,12 @@ describe('bindComponent', () => {
         expect(rainbow.value).toBeUndefined(); // the applying row itself is never touched
     });
 
-    it('a setValue push re-enters the row apply; a no-op guard prevents a command echo', async () => {
-        const state$ = new Subject<unknown>();
+    it('a device push never re-enters the row apply, even when the value is out of sync', async () => {
+        // Faithful to esphome-ts v4 state$: BehaviorSubject(undefined) + filter — current
+        // state replays to late subscribers (esphome-ts dist/index.js:2777-2788). Both
+        // pushes below happen after bindComponent subscribed, so replay never applies.
+        const state = new BehaviorSubject<unknown>(undefined);
+        const state$ = state.pipe(filter((value) => value !== undefined));
         const turnOn = vi.fn();
         const turnOff = vi.fn();
         const raw = { state$, status: false, turnOn, turnOff };
@@ -341,18 +345,18 @@ describe('bindComponent', () => {
 
         const characteristic = assertCharacteristic(context.services[0], ON_CHARACTERISTIC);
 
-        // Pushing true while status is out of sync re-enters the apply handler.
-        state$.next(true);
+        // The push lands the value silently; even a value that disagrees with the component
+        // status (a stale device report) must not echo a command through the onSet handler.
+        state.next(true);
+        await flush(); // let a wrong setValue re-entry (if ever introduced) settle
+        expect(characteristic.value).toBe(true);
+        expect(turnOn).not.toHaveBeenCalled();
+
+        raw.status = true;
+        state.next(true);
         await flush();
         expect(characteristic.value).toBe(true);
-        expect(turnOn).toHaveBeenCalledTimes(1);
-
-        // Echo push: the pushed value already matches the component status, so the no-op
-        // guard inside the apply keeps turnOn/turnOff silent.
-        raw.status = true;
-        state$.next(true);
-        await flush();
-        expect(turnOn).toHaveBeenCalledTimes(1);
+        expect(turnOn).not.toHaveBeenCalled();
         expect(turnOff).not.toHaveBeenCalled();
     });
 
@@ -370,7 +374,6 @@ describe('bindComponent', () => {
                     service: SensorService,
                     name: 'TestSensor',
                     characteristic: CURRENT_VALUE_CHARACTERISTIC,
-                    pushVia: 'updateValue',
                     apply,
                     project: (state: unknown) => (typeof state === 'number' ? state : undefined),
                 },
@@ -406,7 +409,6 @@ describe('bindComponent', () => {
                     service: LightbulbService,
                     name: 'TestLight',
                     characteristic: ON_CHARACTERISTIC,
-                    pushVia: 'updateValue',
                     apply: (value: CharacteristicValue) => {
                         if (value) {
                             raw.turnOn();
@@ -421,7 +423,6 @@ describe('bindComponent', () => {
                     name: 'TestLight - rainbow',
                     subtype: 'rainbow Switch',
                     characteristic: ON_CHARACTERISTIC,
-                    pushVia: 'updateValue',
                     apply: (value: CharacteristicValue) => {
                         raw.effect = value ? 'rainbow' : 'None';
                     },
@@ -433,7 +434,6 @@ describe('bindComponent', () => {
                     name: 'TestLight - strobe',
                     subtype: 'strobe Switch',
                     characteristic: ON_CHARACTERISTIC,
-                    pushVia: 'updateValue',
                     apply: (value: CharacteristicValue) => {
                         raw.effect = value ? 'strobe' : 'None';
                     },

@@ -203,7 +203,7 @@ describe('switchHelper', () => {
     });
 
     describe('state$ subscription lifecycle', () => {
-        it('stays subscribed after the helper returns and pushes remote state with setValue', async () => {
+        it('stays subscribed after the helper returns and pushes remote state with updateValue', () => {
             const { component, raw, state$ } = createFakeSwitchComponent();
             const { accessory } = createFakeAccessory();
 
@@ -213,17 +213,14 @@ describe('switchHelper', () => {
 
             raw.status = true;
             state$.next({});
-            // setValue re-enters onSet and stores only once the handler chain resolves.
-            await flush();
             expect(characteristic.value).toBe(true);
 
             raw.status = false;
             state$.next({});
-            await flush();
             expect(characteristic.value).toBe(false);
         });
 
-        it('a setValue push re-enters the onSet handler, but the no-op guard prevents a command echo', async () => {
+        it('a device push lands via updateValue and never re-enters onSet, echo or not', async () => {
             const { component, raw, state$, turnOn, turnOff } = createFakeSwitchComponent();
             const { accessory } = createFakeAccessory();
 
@@ -233,9 +230,9 @@ describe('switchHelper', () => {
 
             raw.status = true;
             state$.next({});
-            await flush();
             expect(characteristic.value).toBe(true);
-            // Pushed true already equals the component status, so the guard keeps both commands silent.
+            await flush(); // let a wrong setValue re-entry (if ever introduced) settle
+            // The push is silent regardless of whether the value matches the component status.
             expect(turnOn).not.toHaveBeenCalled();
             expect(turnOff).not.toHaveBeenCalled();
         });

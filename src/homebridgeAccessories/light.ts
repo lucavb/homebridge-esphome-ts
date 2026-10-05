@@ -23,7 +23,6 @@ export const lightHelper = (
             service: Service.Lightbulb,
             name: component.name,
             characteristic: CharacteristicClass.On,
-            pushVia: 'updateValue',
             apply: (on) => {
                 if (on) {
                     component.turnOn();
@@ -43,7 +42,6 @@ export const lightHelper = (
                 service: Service.Lightbulb,
                 name: component.name,
                 characteristic: CharacteristicClass.Hue,
-                pushVia: 'updateValue',
                 apply: (hue) => {
                     if (typeof hue === 'number') {
                         lastHue = hue;
@@ -59,7 +57,6 @@ export const lightHelper = (
                 service: Service.Lightbulb,
                 name: component.name,
                 characteristic: CharacteristicClass.Saturation,
-                pushVia: 'updateValue',
                 apply: (saturation) => {
                     if (typeof saturation === 'number') {
                         lastSat = saturation;
@@ -74,7 +71,6 @@ export const lightHelper = (
                 service: Service.Lightbulb,
                 name: component.name,
                 characteristic: CharacteristicClass.Brightness,
-                pushVia: 'updateValue',
                 apply: (brightness) => {
                     if (typeof brightness === 'number') {
                         const hsv = component.hsv;
@@ -90,7 +86,6 @@ export const lightHelper = (
             service: Service.Lightbulb,
             name: component.name,
             characteristic: CharacteristicClass.Brightness,
-            pushVia: 'updateValue',
             apply: (brightness) => {
                 if (typeof brightness === 'number') {
                     component.setBrightness(brightness);
@@ -109,7 +104,6 @@ export const lightHelper = (
                 name: `${component.name} - ${effect}`,
                 subtype: `${effect} Switch`,
                 characteristic: CharacteristicClass.On,
-                pushVia: 'updateValue',
                 apply: (on) => {
                     component.effect = on ? effect : NO_EFFECT;
                 },

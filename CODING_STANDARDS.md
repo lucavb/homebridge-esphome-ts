@@ -6,7 +6,7 @@ Judgement rules enforced at review. The mechanical rules — non-null assertions
 
 A green spec proves nothing if its fake fictionalizes the library. Both gate-3 findings in the #88 work were fakes whose semantics diverged from the installed packages while the tests stayed green.
 
-- A fake reproduces the dependency's observable behavior at every boundary the code under test exercises — not the behavior that makes the test convenient. Two divergences that shipped: esphome-ts v4's `alive$` is a `BehaviorSubject(false)` behind `shareReplay(1)`, so every subscriber receives a buffered `false` synchronously at subscribe; hap's `getCharacteristic(class)` never returns `undefined` — it auto-adds, logging a warning for services that do not list the characteristic as optional.
+- A fake reproduces the dependency's observable behavior at every boundary the code under test exercises — not the behavior that makes the test convenient. Two divergences that shipped: esphome-ts v4's `alive$` delivers a buffered `false` synchronously at subscribe, but that buffered value originates from `socket.connected$`'s `BehaviorSubject(false)` merged into `alive$` (which is `distinctUntilChanged` + `shareReplay(1)` over that merge), not from `alive$` itself being a BehaviorSubject; hap's `getCharacteristic(class)` never returns `undefined` — it auto-adds, logging a warning for services that do not list the characteristic as optional.
 - Reach for real classes from installed dependencies first; a hand-rolled fake earns its place only at boundaries that cannot run in-process.
 - Hap service and characteristic fakes come from the shared harness in `src/testing/` — do not re-derive hap semantics inline in a spec.
 
@@ -14,6 +14,7 @@ A green spec proves nothing if its fake fictionalizes the library. Both gate-3 f
 
 - `testCharacteristic(class)` is the existence check. `getCharacteristic(class)` is retrieval only, after existence is guaranteed — used as an existence probe it auto-adds with per-service warnings in production.
 - A programmatically added characteristic gets an immediate `setValue` whenever its HAP default differs from the intended state.
+- Device pushes use `updateValue`, never `setValue` — `setValue` re-enters the registered `onSet` handler (@homebridge/hap-nodejs Characteristic.js), so pushing device state with it echoes commands back to the device; `updateValue` writes silently and still notifies HomeKit clients on change.
 - HAP values come from `api.hap`; HAP classes are type-only in `'homebridge'`. Handlers are `.onSet`/`.onGet` throwing `HapStatusError(HAPStatus.…)`.
 
 ## TypeScript and rxjs

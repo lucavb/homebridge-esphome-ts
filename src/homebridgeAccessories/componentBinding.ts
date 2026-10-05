@@ -32,22 +32,19 @@ export interface ComponentBinding {
     project?(state: unknown): CharacteristicValue | undefined;
     /** After a successful apply, sibling rows of the same group get updateValue(false) (light effect switches). */
     readonly radioGroup?: string;
-    /**
-     * TEMPORARY until the push policy is unified (commit 3): how `state$` pushes land.
-     * `setValue` re-enters the row's onSet handler (switch/sensor/binarySensor today);
-     * `updateValue` writes the value silently (light today). Default: `setValue`.
-     */
-    readonly pushVia?: 'setValue' | 'updateValue';
 }
 
 /**
  * Binds the given component's rows onto the accessory: find-or-add per service row
  * (matched on service UUID and optional subtype), wire `onSet`/`onGet` with the uniform
  * HapStatusError wrap, and push projected state per row through one owned `state$`
- * subscription per row (aggregated into the returned teardown). Pushes land through
- * `setValue` by default (re-enters the row's onSet, like real hap); rows declaring
- * `pushVia: 'updateValue'` push silently. Sibling pushes of a
- * {@link ComponentBinding.radioGroup} always go through `updateValue`.
+ * subscription per row (aggregated into the returned teardown).
+ *
+ * Push policy: device pushes land through `updateValue`, never `setValue` — `setValue`
+ * re-enters the registered `onSet` handler (verified against @homebridge/hap-nodejs
+ * Characteristic.js) and echoes commands back to the device, while `updateValue` writes
+ * silently and still notifies HomeKit clients on change. Sibling pushes of a
+ * {@link ComponentBinding.radioGroup} use the same silent path.
  *
  * Every handler error translates to `HapStatusError(api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE)` —
  * with real hap any handler throw already maps to -70402, so the wrap centralizes the idiom.
@@ -91,7 +88,6 @@ export const bindComponent = (
     for (const { row, characteristic } of resolved) {
         const apply = row.apply;
         const read = row.read;
-        const push = row.pushVia === 'updateValue' ? 'updateValue' : 'setValue';
 
         if (apply) {
             characteristic.onSet(async (value: CharacteristicValue) => {
@@ -127,11 +123,7 @@ export const bindComponent = (
                         if (value === undefined) {
                             return;
                         }
-                        if (push === 'updateValue') {
-                            characteristic.updateValue(value);
-                        } else {
-                            characteristic.setValue(value);
-                        }
+                        characteristic.updateValue(value);
                     }),
                 )
                 .subscribe(),
