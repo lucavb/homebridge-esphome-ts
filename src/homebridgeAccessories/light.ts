@@ -2,7 +2,9 @@ import { tap } from 'rxjs';
 import type { API, CharacteristicValue, PlatformAccessory, Service as HAPService } from 'homebridge';
 import { HAPStatus } from 'homebridge';
 import type { LightComponent, LightStateEvent } from 'esphome-ts';
-import { DEFAULT_NO_EFFECT } from 'esphome-ts';
+
+// DEFAULT_NO_EFFECT from esphome-ts v3 was removed in v4; its v3 value was the string 'None'.
+const NO_EFFECT = 'None';
 
 export const lightHelper = (component: LightComponent, accessory: PlatformAccessory, api: API): boolean => {
     const { Characteristic: CharacteristicClass, Service } = api.hap;
@@ -76,7 +78,7 @@ export const lightHelper = (component: LightComponent, accessory: PlatformAccess
 
     const effects = component
         .availableEffects()
-        .filter((effect: string) => effect !== DEFAULT_NO_EFFECT)
+        .filter((effect: string) => effect !== NO_EFFECT)
         .map((effect: string) => {
             const switchName = `${component.name} - ${effect}`;
             const switchSubType = `${effect} Switch`;
@@ -96,7 +98,7 @@ export const lightHelper = (component: LightComponent, accessory: PlatformAccess
         effects.forEach(({ name, service }): void => {
             service?.getCharacteristic(CharacteristicClass.On)?.onSet(async (on: CharacteristicValue) => {
                 try {
-                    component.effect = on ? name : DEFAULT_NO_EFFECT;
+                    component.effect = on ? name : NO_EFFECT;
                     effects
                         .filter(({ name: otherEffectName }) => otherEffectName !== name)
                         .forEach(({ service: otherEffectService }) => {

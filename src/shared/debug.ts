@@ -1,6 +1,6 @@
 import type { EspDevice, ReadData } from 'esphome-ts';
 import { isRecord } from './typeguards.js';
-import { EspSocket } from 'esphome-ts/dist/api/espSocket.js';
+import { EspSocket } from 'esphome-ts';
 import { concatMap, map } from 'rxjs';
 import { existsSync, promises as fs } from 'fs';
 import { from, Observable } from 'rxjs';

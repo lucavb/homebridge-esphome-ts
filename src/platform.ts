@@ -4,7 +4,7 @@ import { TimeoutError, catchError, filter, map, mergeMap, take, tap, timeout } f
 import { componentHelpers } from './homebridgeAccessories/componentHelpers.js';
 import { PLATFORM_NAME, PLUGIN_NAME } from './constants.js';
 import { writeReadDataToLogFile } from './shared/index.js';
-import { EspDevice } from 'esphome-ts';
+import { EspDevice, InvalidPasswordError } from 'esphome-ts';
 import { discoverDevices } from './discovery.js';
 
 interface IEsphomeDeviceConfig {
@@ -97,6 +97,18 @@ export class EsphomePlatform implements DynamicPlatformPlugin {
                             interval(deviceConfig.retryAfter ?? this.config.retryAfter ?? DEFAULT_RETRY_AFTER).pipe(
                                 tap(() => this.log.info(`Trying to reconnect now to device ${deviceConfig.host}`)),
                             ),
+                        );
+                        this.subscription.add(
+                            device.error$.subscribe((error) => {
+                                if (error instanceof InvalidPasswordError) {
+                                    this.log.error(
+                                        `The esphome device ${deviceConfig.host} rejected your password.` +
+                                            ' Please check the "password" configured for this device.',
+                                    );
+                                } else {
+                                    this.log.debug(`Error from esphome device ${deviceConfig.host}`, error);
+                                }
+                            }),
                         );
                         return device.discovery$.pipe(
                             filter((value: boolean) => value),
