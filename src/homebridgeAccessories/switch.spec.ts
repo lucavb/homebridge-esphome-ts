@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { API, CharacteristicValue, PlatformAccessory } from 'homebridge';
 import { Subject } from 'rxjs';
 import type { SwitchComponent } from 'esphome-ts';
+import { ok } from 'node:assert/strict';
 
 import { switchHelper } from './switch.js';
 
@@ -47,6 +48,17 @@ interface FakeSwitchComponent {
     turnOn: ReturnType<typeof vi.fn>;
     turnOff: ReturnType<typeof vi.fn>;
 }
+
+/**
+ * Returns the On characteristic of the Switch service the helper wired up,
+ * failing loudly instead of returning undefined.
+ */
+const onCharacteristicOf = (accessory: PlatformAccessory): FakeCharacteristic => {
+    const service = accessory.services[0] as unknown as FakeSwitchService;
+    const characteristic = service.getCharacteristic(ON_CHARACTERISTIC_KEY);
+    ok(characteristic, 'expected the On characteristic to be wired by switchHelper');
+    return characteristic;
+};
 
 /** Runtime stand-in for `api.hap.Service` (a namespace object whose props are service constructor classes). */
 class FakeSwitchService {
@@ -161,9 +173,7 @@ describe('switchHelper', () => {
 
         switchHelper(component, accessory, createFakeApi());
 
-        const service = accessory.services[0] as unknown as FakeSwitchService;
-        const onCharacteristic = service.getCharacteristic(ON_CHARACTERISTIC_KEY)!;
-        expect(onCharacteristic).toBeDefined();
+        const onCharacteristic = onCharacteristicOf(accessory);
         expect(typeof onCharacteristic.setHandler).toBe('function');
     });
 
@@ -174,8 +184,8 @@ describe('switchHelper', () => {
 
             switchHelper(component, accessory, createFakeApi());
 
-            const service = accessory.services[0] as unknown as FakeSwitchService;
-            const setHandler = service.getCharacteristic(ON_CHARACTERISTIC_KEY)!.setHandler!;
+            const setHandler = onCharacteristicOf(accessory).setHandler;
+            ok(setHandler, 'expected the On onSet handler to be registered');
             return { component, raw, turnOn, turnOff, setHandler, accessory };
         };
 
@@ -231,8 +241,7 @@ describe('switchHelper', () => {
 
             switchHelper(component, accessory, createFakeApi());
 
-            const service = accessory.services[0] as unknown as FakeSwitchService;
-            const onCharacteristic = service.getCharacteristic(ON_CHARACTERISTIC_KEY)!;
+            const onCharacteristic = onCharacteristicOf(accessory);
 
             raw.status = true;
             state$.next({});

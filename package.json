@@ -14,8 +14,9 @@
         "format:check": "prettier --check --ignore-unknown .",
         "test": "vitest run",
         "test:watch": "vitest",
+        "verify": "npm run lint && npm run typecheck && npm run build && npm run format:check && npm test && node --input-type=module -e \"await import('./dist/index.js')\"",
         "integration:test": "homebridge -U examples -P .",
-        "prepublishOnly": "npm run lint && npm run format:check && npm run build"
+        "prepublishOnly": "npm run verify"
     },
     "repository": "https://github.com/lucavb/homebridge-esphome-ts",
     "files": [

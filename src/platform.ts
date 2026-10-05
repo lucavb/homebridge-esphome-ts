@@ -1,5 +1,6 @@
-import { API, DynamicPlatformPlugin, Logging, PlatformAccessory, PlatformConfig } from 'homebridge';
-import { concat, from, interval, Observable, EMPTY, Subscription } from 'rxjs';
+import type { API, DynamicPlatformPlugin, Logging, PlatformAccessory, PlatformConfig } from 'homebridge';
+import type { Observable } from 'rxjs';
+import { concat, from, interval, EMPTY, Subscription } from 'rxjs';
 import { TimeoutError, catchError, filter, map, mergeMap, take, tap, timeout } from 'rxjs';
 import { componentHelpers } from './homebridgeAccessories/componentHelpers.js';
 import { PLATFORM_NAME, PLUGIN_NAME } from './constants.js';

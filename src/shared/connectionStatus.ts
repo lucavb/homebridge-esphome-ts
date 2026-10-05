@@ -1,6 +1,6 @@
 import type { API, Logging, PlatformAccessory } from 'homebridge';
-import { distinctUntilChanged, Subscription } from 'rxjs';
-import type { Observable } from 'rxjs';
+import { distinctUntilChanged } from 'rxjs';
+import type { Observable, Subscription } from 'rxjs';
 
 /** Structural stand-in for the part of EspDevice this unit needs. */
 interface AliveStreamSource {

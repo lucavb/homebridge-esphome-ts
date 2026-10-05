@@ -1,4 +1,4 @@
-import { API } from 'homebridge';
+import type { API } from 'homebridge';
 import { EsphomePlatform } from './platform.js';
 import { PLUGIN_NAME, PLATFORM_NAME } from './constants.js';
 
