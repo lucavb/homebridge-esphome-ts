@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { Service } from 'homebridge';
 
 import {
@@ -17,6 +17,11 @@ const UNUSED_CHARACTERISTIC = makeFakeCharacteristicClass('unused-uuid');
 
 const SwitchService = makeFakeServiceClass('switch-service-uuid', [ON_CHARACTERISTIC]);
 
+/** Lets an async setValue handler chain (assign-on-resolve) settle before asserting effects. */
+const flush = async (): Promise<void> => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+};
+
 describe('makeFakeCharacteristicClass', () => {
     it('exposes the uuid on static and instance and keeps value state', () => {
         expect(LIGHT_CHARACTERISTIC.UUID).toBe('light-uuid');
@@ -26,9 +31,81 @@ describe('makeFakeCharacteristicClass', () => {
         expect(characteristic.value).toBe(42);
         characteristic.updateValue(0.5);
         expect(characteristic.value).toBe(0.5);
+    });
 
-        const initial = new LIGHT_CHARACTERISTIC(3);
-        expect(initial.value).toBe(3);
+    it('starts with the no-write sentinel: value reads undefined when nobody wrote (deliberate divergence from real hap getDefaultValue)', () => {
+        const characteristic = new LIGHT_CHARACTERISTIC();
+        expect(characteristic.value).toBeUndefined();
+    });
+
+    it('stores onSet/onGet handlers and returns the characteristic for chaining', () => {
+        const characteristic = new LIGHT_CHARACTERISTIC();
+        const setHandler = vi.fn();
+        const getHandler = vi.fn(() => 5);
+
+        expect(characteristic.onSet(setHandler)).toBe(characteristic);
+        expect(characteristic.onGet(getHandler)).toBe(characteristic);
+        expect(characteristic.setHandler).toBe(setHandler);
+        expect(characteristic.getHandler).toBe(getHandler);
+        expect(characteristic.getHandler?.()).toBe(5);
+    });
+
+    it('re-enters the stored onSet handler on setValue and stores only after it resolves', async () => {
+        const characteristic = new LIGHT_CHARACTERISTIC();
+        const resolvingHandler = vi.fn(async () => undefined);
+        characteristic.onSet(resolvingHandler);
+
+        characteristic.setValue(7);
+
+        // Assign-on-resolve (Characteristic.js:1804-1833): nothing stored while the chain is pending.
+        expect(resolvingHandler).toHaveBeenCalledWith(7);
+        expect(characteristic.value).toBeUndefined();
+
+        await flush();
+        expect(characteristic.value).toBe(7);
+    });
+
+    it('re-enters the stored onSet handler on setValue; a rejection is swallowed and the value is not stored', async () => {
+        const characteristic = new LIGHT_CHARACTERISTIC();
+        const rejectingHandler = vi.fn(() => Promise.reject(new Error('device gone')));
+        characteristic.onSet(rejectingHandler);
+
+        expect(() => characteristic.setValue(7)).not.toThrow();
+
+        await vi.waitFor(() => expect(rejectingHandler).toHaveBeenCalledWith(7));
+        // stays at its prior (sentinel) state
+        expect(characteristic.value).toBeUndefined();
+    });
+
+    it('swallows a synchronously throwing onSet handler on setValue re-entry and does not store the value', async () => {
+        const characteristic = new LIGHT_CHARACTERISTIC();
+        const throwingHandler = vi.fn(() => {
+            throw new Error('device gone');
+        });
+        characteristic.onSet(throwingHandler);
+
+        expect(() => characteristic.setValue(9)).not.toThrow();
+
+        expect(throwingHandler).toHaveBeenCalledWith(9);
+        // stays at its prior (sentinel) state
+        expect(characteristic.value).toBeUndefined();
+    });
+
+    it('stores the value synchronously when no onSet handler is registered', () => {
+        const characteristic = new LIGHT_CHARACTERISTIC();
+        characteristic.setValue(11);
+        expect(characteristic.value).toBe(11);
+    });
+
+    it('updateValue skips the onSet handler', async () => {
+        const characteristic = new LIGHT_CHARACTERISTIC();
+        const setHandler = vi.fn();
+        characteristic.onSet(setHandler);
+
+        characteristic.updateValue(0.5);
+
+        expect(characteristic.value).toBe(0.5);
+        expect(setHandler).not.toHaveBeenCalled();
     });
 });
 
@@ -107,14 +184,15 @@ describe('makeFakeServiceClass', () => {
     describe('addCharacteristic', () => {
         it('adds the given instance silently and makes it findable', () => {
             const service = new SwitchService('entry light');
-            const nameCharacteristic = new NAME_CHARACTERISTIC('');
+            const nameCharacteristic = new NAME_CHARACTERISTIC();
 
             const added = service.addCharacteristic(nameCharacteristic);
 
             expect(added).toBe(nameCharacteristic);
             expect(service.testCharacteristic(NAME_CHARACTERISTIC)).toBe(true);
             expect(service.autoAddedCharacteristics).toHaveLength(0);
-            expect(added.value).toBe('');
+            // no-arg construction default-initializes the value, like real concrete classes
+            expect(added.value).toBeUndefined();
         });
     });
 });

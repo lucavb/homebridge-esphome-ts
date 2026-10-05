@@ -20,6 +20,11 @@ import type { CharacteristicValue, PlatformAccessory } from 'homebridge';
  * classes from installed dependencies everywhere else.
  */
 
+/** Handler shape for `onSet` registrations; rejections are swallowed on re-entry (like real hap). */
+export type FakeSetHandler = (value: CharacteristicValue) => unknown;
+/** Handler shape for `onGet` registrations. */
+export type FakeGetHandler = () => unknown;
+
 export interface FakeHapCharacteristic {
     UUID: string;
     /**
@@ -29,12 +34,18 @@ export interface FakeHapCharacteristic {
      * characteristics.
      */
     value: CharacteristicValue | undefined;
+    setHandler: FakeSetHandler | undefined;
+    getHandler: FakeGetHandler | undefined;
+    /** Models real hap: registers the handler and returns the characteristic for chaining. */
+    onSet: (handler: FakeSetHandler) => FakeHapCharacteristic;
+    /** Models real hap: registers the handler and returns the characteristic for chaining. */
+    onGet: (handler: FakeGetHandler) => FakeHapCharacteristic;
     setValue: (value: CharacteristicValue) => void;
     updateValue: (value: CharacteristicValue) => void;
 }
 
 export interface FakeHapCharacteristicConstructor {
-    new (initialValue?: CharacteristicValue): FakeHapCharacteristic;
+    new (): FakeHapCharacteristic;
     readonly UUID: string;
 }
 
@@ -56,21 +67,63 @@ export interface FakeHapService {
     addCharacteristic: (characteristic: FakeHapCharacteristic) => FakeHapCharacteristic;
 }
 
-/** Creates a fake Characteristic class (static and instance UUID, value state, setValue/updateValue). */
+/**
+ * Creates a fake Characteristic class (static and instance UUID, value state,
+ * onSet/onGet handler storage, setValue/updateValue).
+ *
+ * DELIBERATE divergence from real hap: `value` starts as `undefined` — a no-write
+ * sentinel used by this harness so a characteristic nobody wrote reads as `undefined`.
+ * Real hap characteristics instead serve their default value when nobody has written
+ * (Characteristic.js `getValue()` → `getDefaultValue()`: On → `false`, numerics →
+ * minValue/0).
+ */
 export const makeFakeCharacteristicClass = (uuid: string): FakeHapCharacteristicConstructor => {
     class FakeHapCharacteristic implements FakeHapCharacteristic {
         public static readonly UUID = uuid;
         public readonly UUID = uuid;
         public value: CharacteristicValue | undefined;
+        public setHandler: FakeSetHandler | undefined;
+        public getHandler: FakeGetHandler | undefined;
 
-        public constructor(initialValue?: CharacteristicValue) {
-            this.value = initialValue;
+        public constructor() {
+            this.value = undefined;
         }
 
+        public onSet(handler: FakeSetHandler): FakeHapCharacteristic {
+            this.setHandler = handler;
+            return this;
+        }
+
+        public onGet(handler: FakeGetHandler): FakeHapCharacteristic {
+            this.getHandler = handler;
+            return this;
+        }
+
+        /**
+         * Models real hap assign-on-resolve semantics (Characteristic.js:1804-1833): with a
+         * registered `onSet` handler the value is stored only once the handler chain
+         * resolves; on rejection (or a synchronous throw) the failure is swallowed — real
+         * hap never surfaces it without a backing callback — and the value is NOT stored.
+         * Without a handler the value is stored synchronously.
+         */
         public setValue(value: CharacteristicValue): void {
-            this.value = value;
+            const handler = this.setHandler;
+            if (!handler) {
+                this.value = value;
+                return;
+            }
+            try {
+                void Promise.resolve(handler(value))
+                    .then(() => {
+                        this.value = value;
+                    })
+                    .catch(() => undefined);
+            } catch {
+                // Rejection without a callback is intentionally swallowed, like real hap.
+            }
         }
 
+        /** Models real hap (Characteristic.js:1628-1658): updates the value without re-entering `onSet`. */
         public updateValue(value: CharacteristicValue): void {
             this.value = value;
         }

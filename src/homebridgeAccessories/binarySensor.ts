@@ -1,7 +1,9 @@
-import { tap } from 'rxjs';
 import type { API, Characteristic, PlatformAccessory, Service } from 'homebridge';
-import { BinarySensorTypes } from 'esphome-ts';
-import type { BinarySensorComponent } from 'esphome-ts';
+import { BinarySensorTypes, BinarySensorComponent } from 'esphome-ts';
+import type { BaseComponent } from 'esphome-ts';
+
+import { bindComponent } from './componentBinding.js';
+import type { ComponentBinding } from './componentBinding.js';
 
 type SupportedServices =
     typeof Service.MotionSensor | typeof Service.LeakSensor | typeof Service.ContactSensor | typeof Service.SmokeSensor;
@@ -58,29 +60,28 @@ const map = (api: API): Map<BinarySensorTypes, BinarySensorHomekit> => {
 };
 
 export const binarySensorHelper = (
-    component: BinarySensorComponent,
+    component: BaseComponent,
     accessory: PlatformAccessory,
     api: API,
-): boolean => {
-    const homekitStuff = map(api).get(component.deviceClass);
-
-    if (homekitStuff) {
-        const ServiceConstructor = homekitStuff?.service;
-        let service = accessory.services.find((service) => service.UUID === ServiceConstructor.UUID);
-        if (!service) {
-            service = accessory.addService(new ServiceConstructor(component.name, ''));
-        }
-
-        service.getCharacteristic(homekitStuff.characteristic)?.onGet(async () => component.status);
-
-        component.state$
-            .pipe(
-                tap(() => {
-                    service?.getCharacteristic(homekitStuff.characteristic)?.setValue(component.status);
-                }),
-            )
-            .subscribe();
-        return true;
+): (() => void) | undefined => {
+    if (!(component instanceof BinarySensorComponent)) {
+        return undefined;
     }
-    return false;
+
+    const homekitStuff = map(api).get(component.deviceClass);
+    if (!homekitStuff) {
+        return undefined;
+    }
+
+    const bindings: ComponentBinding[] = [
+        {
+            service: homekitStuff.service,
+            name: component.name,
+            characteristic: homekitStuff.characteristic,
+            read: () => component.status,
+            project: () => component.status,
+        },
+    ];
+
+    return bindComponent(component, accessory, api, bindings);
 };

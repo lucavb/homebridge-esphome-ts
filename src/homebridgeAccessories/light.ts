@@ -1,140 +1,120 @@
-import { tap } from 'rxjs';
-import type { API, CharacteristicValue, PlatformAccessory, Service as HAPService } from 'homebridge';
-import { HAPStatus } from 'homebridge';
-import type { LightComponent, LightStateEvent } from 'esphome-ts';
+import type { API, PlatformAccessory } from 'homebridge';
+import type { BaseComponent, LightStateEvent } from 'esphome-ts';
+import { LightComponent } from 'esphome-ts';
+
+import { bindComponent } from './componentBinding.js';
+import type { ComponentBinding } from './componentBinding.js';
 
 // DEFAULT_NO_EFFECT from esphome-ts v3 was removed in v4; its v3 value was the string 'None'.
 const NO_EFFECT = 'None';
 
-export const lightHelper = (component: LightComponent, accessory: PlatformAccessory, api: API): boolean => {
-    const { Characteristic: CharacteristicClass, Service } = api.hap;
-    let lightBulbService: HAPService | undefined = accessory.services.find(
-        (service: HAPService) => service.UUID === Service.Lightbulb.UUID,
-    );
-    if (!lightBulbService) {
-        lightBulbService = accessory.addService(new Service.Lightbulb(component.name, ''));
+export const lightHelper = (
+    component: BaseComponent,
+    accessory: PlatformAccessory,
+    api: API,
+): (() => void) | undefined => {
+    if (!(component instanceof LightComponent)) {
+        return undefined;
     }
-    const bulbService = lightBulbService;
+    const { Characteristic: CharacteristicClass, Service } = api.hap;
+
+    const bindings: ComponentBinding[] = [
+        {
+            service: Service.Lightbulb,
+            name: component.name,
+            characteristic: CharacteristicClass.On,
+            pushVia: 'updateValue',
+            apply: (on) => {
+                if (on) {
+                    component.turnOn();
+                } else {
+                    component.turnOff();
+                }
+            },
+            project: (state: LightStateEvent) => !!state.state,
+        },
+    ];
 
     if (component.supportsRgb) {
         let lastHue: number | undefined;
         let lastSat: number | undefined;
-        lightBulbService.getCharacteristic(CharacteristicClass.Hue)?.onSet(async (hue: CharacteristicValue) => {
-            try {
-                lastHue = hue as number;
-                const hsv = component.hsv;
-                hsv.hue = lastHue ?? 0;
-                hsv.saturation = lastSat ?? 0;
-                component.hsv = hsv;
-            } catch {
-                throw new api.hap.HapStatusError(HAPStatus.SERVICE_COMMUNICATION_FAILURE);
-            }
-        });
-        lightBulbService
-            .getCharacteristic(CharacteristicClass.Saturation)
-            ?.onSet(async (saturation: CharacteristicValue) => {
-                try {
-                    lastSat = saturation as number;
-                } catch {
-                    throw new api.hap.HapStatusError(HAPStatus.SERVICE_COMMUNICATION_FAILURE);
-                }
-            });
-        lightBulbService
-            .getCharacteristic(CharacteristicClass.Brightness)
-            ?.onSet(async (brightness: CharacteristicValue) => {
-                try {
-                    const hsv = component.hsv;
-                    hsv.value = brightness as number;
-                    component.hsv = hsv;
-                } catch {
-                    throw new api.hap.HapStatusError(HAPStatus.SERVICE_COMMUNICATION_FAILURE);
-                }
-            });
-    } else if (component.supportsBrightness) {
-        lightBulbService
-            .getCharacteristic(CharacteristicClass.Brightness)
-            ?.onSet(async (brightness: CharacteristicValue) => {
-                try {
-                    if (typeof brightness === 'number') {
-                        component.setBrightness(brightness);
+        bindings.push(
+            {
+                service: Service.Lightbulb,
+                name: component.name,
+                characteristic: CharacteristicClass.Hue,
+                pushVia: 'updateValue',
+                apply: (hue) => {
+                    if (typeof hue === 'number') {
+                        lastHue = hue;
+                        const hsv = component.hsv;
+                        hsv.hue = lastHue ?? 0;
+                        hsv.saturation = lastSat ?? 0;
+                        component.hsv = hsv;
                     }
-                } catch {
-                    throw new api.hap.HapStatusError(HAPStatus.SERVICE_COMMUNICATION_FAILURE);
+                },
+                project: () => component.hsv.hue,
+            },
+            {
+                service: Service.Lightbulb,
+                name: component.name,
+                characteristic: CharacteristicClass.Saturation,
+                pushVia: 'updateValue',
+                apply: (saturation) => {
+                    if (typeof saturation === 'number') {
+                        lastSat = saturation;
+                    }
+                },
+                project: () => component.hsv.saturation,
+            },
+            {
+                service: Service.Lightbulb,
+                name: component.name,
+                characteristic: CharacteristicClass.Brightness,
+                pushVia: 'updateValue',
+                apply: (brightness) => {
+                    if (typeof brightness === 'number') {
+                        const hsv = component.hsv;
+                        hsv.value = brightness;
+                        component.hsv = hsv;
+                    }
+                },
+                project: () => component.hsv.value,
+            },
+        );
+    } else if (component.supportsBrightness) {
+        bindings.push({
+            service: Service.Lightbulb,
+            name: component.name,
+            characteristic: CharacteristicClass.Brightness,
+            pushVia: 'updateValue',
+            apply: (brightness) => {
+                if (typeof brightness === 'number') {
+                    component.setBrightness(brightness);
                 }
-            });
+            },
+            project: (state: LightStateEvent) => (state.brightness ?? 0) * 100,
+        });
     }
-
-    lightBulbService.getCharacteristic(CharacteristicClass.On)?.onSet(async (on: CharacteristicValue) => {
-        try {
-            if (on) {
-                component.turnOn();
-            } else {
-                component.turnOff();
-            }
-        } catch {
-            throw new api.hap.HapStatusError(HAPStatus.SERVICE_COMMUNICATION_FAILURE);
-        }
-    });
 
     const effects = component
         .availableEffects()
         .filter((effect: string) => effect !== NO_EFFECT)
-        .map((effect: string) => {
-            const switchName = `${component.name} - ${effect}`;
-            const switchSubType = `${effect} Switch`;
-            let switchService: HAPService | undefined = accessory.services.find(
-                (service: HAPService) => service.UUID === Service.Switch.UUID && service.subtype === switchSubType,
-            );
-            if (!switchService) {
-                switchService = accessory.addService(new Service.Switch(switchName, switchSubType));
-            }
+        .map((effect: string): ComponentBinding => {
             return {
-                service: switchService,
-                name: effect,
+                service: Service.Switch,
+                name: `${component.name} - ${effect}`,
+                subtype: `${effect} Switch`,
+                characteristic: CharacteristicClass.On,
+                pushVia: 'updateValue',
+                apply: (on) => {
+                    component.effect = on ? effect : NO_EFFECT;
+                },
+                project: (state: LightStateEvent) => state.effect === effect,
+                radioGroup: `${component.name}-effects`,
             };
         });
+    bindings.push(...effects);
 
-    if (effects.length > 0) {
-        effects.forEach(({ name, service }): void => {
-            service?.getCharacteristic(CharacteristicClass.On)?.onSet(async (on: CharacteristicValue) => {
-                try {
-                    component.effect = on ? name : NO_EFFECT;
-                    effects
-                        .filter(({ name: otherEffectName }) => otherEffectName !== name)
-                        .forEach(({ service: otherEffectService }) => {
-                            otherEffectService?.getCharacteristic(CharacteristicClass.On).updateValue(false);
-                        });
-                } catch {
-                    throw new api.hap.HapStatusError(HAPStatus.SERVICE_COMMUNICATION_FAILURE);
-                }
-            });
-        });
-    }
-
-    component.state$
-        .pipe(
-            tap((state: LightStateEvent) => {
-                bulbService.getCharacteristic(CharacteristicClass.On)?.updateValue(!!state.state);
-                if (component.supportsRgb) {
-                    const hsv = component.hsv;
-                    bulbService.getCharacteristic(CharacteristicClass.Hue)?.updateValue(hsv.hue);
-                    bulbService.getCharacteristic(CharacteristicClass.Saturation)?.updateValue(hsv.saturation);
-                    bulbService.getCharacteristic(CharacteristicClass.Brightness)?.updateValue(hsv.value);
-                } else if (component.supportsBrightness) {
-                    bulbService
-                        .getCharacteristic(CharacteristicClass.Brightness)
-                        ?.updateValue((state.brightness ?? 0) * 100);
-                }
-                if (effects.length > 0) {
-                    effects.forEach(({ name: effectName, service: effectService }): void => {
-                        effectService
-                            ?.getCharacteristic(CharacteristicClass.On)
-                            ?.updateValue(effectName === state.effect);
-                    });
-                }
-            }),
-        )
-        .subscribe();
-
-    return true;
+    return bindComponent(component, accessory, api, bindings);
 };

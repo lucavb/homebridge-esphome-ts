@@ -1,108 +1,38 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { API, CharacteristicValue, PlatformAccessory } from 'homebridge';
 import { Subject } from 'rxjs';
-import type { SwitchComponent } from 'esphome-ts';
+import type { BaseComponent } from 'esphome-ts';
 import { ok } from 'node:assert/strict';
 
 import { switchHelper } from './switch.js';
+import {
+    assertCharacteristic,
+    makeFakeCharacteristicClass,
+    makeFakeServiceClass,
+    type FakeHapCharacteristic,
+    type FakeHapService,
+} from '../testing/hapFakes.js';
 
-const SWITCH_SERVICE_UUID = '49-0000-1000-8000-0026bb765291';
-const ON_CHARACTERISTIC_KEY = 'on-characteristic-uuid';
+const ON_CHARACTERISTIC = makeFakeCharacteristicClass('on-uuid');
+const SwitchService = makeFakeServiceClass('switch-service-uuid', [ON_CHARACTERISTIC]);
 
 class FakeHapStatusError extends Error {}
-
-interface FakeCharacteristic {
-    value: CharacteristicValue | undefined;
-    setHandler: undefined | ((value: CharacteristicValue) => Promise<void>);
-    onSet: (handler: (value: CharacteristicValue) => Promise<void>) => FakeCharacteristic;
-    onGet: (handler: () => Promise<CharacteristicValue> | CharacteristicValue) => FakeCharacteristic;
-    setValue: (value: CharacteristicValue) => void;
-    updateValue: (value: CharacteristicValue) => void;
-}
-
-const createFakeCharacteristic = (): FakeCharacteristic => {
-    const characteristic: FakeCharacteristic & Record<string, unknown> = {
-        value: undefined,
-        setHandler: undefined,
-        onSet(handler) {
-            characteristic.setHandler = handler;
-            return this;
-        },
-        onGet() {
-            return this;
-        },
-        setValue(value) {
-            characteristic.value = value;
-        },
-        updateValue(value) {
-            characteristic.value = value;
-        },
-    };
-    return characteristic;
-};
-
-interface FakeSwitchComponent {
-    name: string;
-    state$: Subject<unknown>;
-    status: boolean;
-    turnOn: ReturnType<typeof vi.fn>;
-    turnOff: ReturnType<typeof vi.fn>;
-}
-
-/**
- * Returns the On characteristic of the Switch service the helper wired up,
- * failing loudly instead of returning undefined.
- */
-const onCharacteristicOf = (accessory: PlatformAccessory): FakeCharacteristic => {
-    const service = accessory.services[0] as unknown as FakeSwitchService;
-    const characteristic = service.getCharacteristic(ON_CHARACTERISTIC_KEY);
-    ok(characteristic, 'expected the On characteristic to be wired by switchHelper');
-    return characteristic;
-};
-
-/** Runtime stand-in for `api.hap.Service` (a namespace object whose props are service constructor classes). */
-class FakeSwitchService {
-    public static readonly UUID = SWITCH_SERVICE_UUID;
-    public readonly UUID = SWITCH_SERVICE_UUID;
-    public readonly name: string;
-    public readonly subtype: string;
-    public readonly characteristics: Map<string, FakeCharacteristic>;
-
-    public constructor(name: string, subtype: string) {
-        this.name = name;
-        this.subtype = subtype;
-        this.characteristics = new Map([[ON_CHARACTERISTIC_KEY, createFakeCharacteristic()]]);
-    }
-
-    public getCharacteristic(key: string): FakeCharacteristic | undefined {
-        return this.characteristics.get(key);
-    }
-}
-
-const ServiceClass = { Switch: FakeSwitchService };
-
-/** Runtime stand-in for `api.hap.Characteristic`. */
-const CharacteristicClass = { On: ON_CHARACTERISTIC_KEY };
 
 const createFakeApi = () =>
     ({
         hap: {
-            Service: ServiceClass,
-            Characteristic: CharacteristicClass,
+            Service: { Switch: SwitchService },
+            Characteristic: { On: ON_CHARACTERISTIC },
             HapStatusError: FakeHapStatusError,
             HAPStatus: { SERVICE_COMMUNICATION_FAILURE: 'SERVICE_COMMUNICATION_FAILURE' },
         },
     }) as unknown as API;
 
-interface FakeAccessoryContext {
-    services: PlatformAccessory['services'];
-}
-
-const createFakeAccessory = (...preExistingServices: PlatformAccessory['services']) => {
-    const context: FakeAccessoryContext = { services: [...preExistingServices] };
+const createFakeAccessory = (...preExistingServices: FakeHapService[]) => {
+    const context = { services: [...preExistingServices] };
     const accessory = {
         services: context.services,
-        addService(service: PlatformAccessory['services'][number]): PlatformAccessory['services'][number] {
+        addService(service: FakeHapService): FakeHapService {
             context.services.push(service);
             return service;
         },
@@ -110,10 +40,20 @@ const createFakeAccessory = (...preExistingServices: PlatformAccessory['services
     return { accessory, context };
 };
 
+interface FakeSwitchComponent {
+    name: string;
+    type: 'switch';
+    state$: Subject<unknown>;
+    status: boolean;
+    turnOn: ReturnType<typeof vi.fn>;
+    turnOff: ReturnType<typeof vi.fn>;
+}
+
 const createFakeSwitchComponent = (options?: { throwOnCall?: boolean }) => {
     const state$ = new Subject<unknown>();
     const fake: FakeSwitchComponent = {
         state$,
+        type: 'switch', // isSwitchComponent narrows on this runtime property
         status: false,
         name: 'TestSwitch',
         turnOn: vi.fn(() => {
@@ -130,41 +70,68 @@ const createFakeSwitchComponent = (options?: { throwOnCall?: boolean }) => {
     return {
         /** The mutable raw handle, so tests can change status without fighting readonly types. */
         raw: fake,
-        component: fake as unknown as SwitchComponent,
+        /** Boundary cast: only state$ and the switch surface are exercised by switchHelper. */
+        component: fake as unknown as BaseComponent,
         state$,
         turnOn: fake.turnOn,
         turnOff: fake.turnOff,
     };
 };
 
+/** Lets setValue's re-entered onSet handler (async) settle before asserting effects. */
+const flush = async (): Promise<void> => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+};
+
+/**
+ * Returns the On characteristic of the Switch service the helper wired up,
+ * failing loudly instead of returning undefined.
+ */
+const onCharacteristicOf = (accessory: PlatformAccessory): FakeHapCharacteristic => {
+    const service = accessory.services[0] as unknown as FakeHapService;
+    return assertCharacteristic(service, ON_CHARACTERISTIC);
+};
+
+/** Invokes the stored onSet handler directly (setValue would swallow its rejection). */
+const invokeSet = async (value: CharacteristicValue, characteristic: FakeHapCharacteristic): Promise<unknown> => {
+    const handler = characteristic.setHandler;
+    ok(handler, 'expected the On onSet handler to be registered');
+    return await handler(value);
+};
+
 describe('switchHelper', () => {
-    it('returns true and registers the wiring', () => {
+    it('returns a teardown function (the boolean return is gone)', () => {
         const { component } = createFakeSwitchComponent();
         const { accessory } = createFakeAccessory();
-        expect(switchHelper(component, accessory, createFakeApi())).toBe(true);
+
+        const teardown = switchHelper(component, accessory, createFakeApi());
+
+        expect(teardown).toBeTypeOf('function');
+        expect(() => teardown?.()).not.toThrow();
     });
 
-    it('adds a Switch service when the accessory has none', () => {
+    it('adds a Switch service when the accessory has none, with the component name', () => {
         const { component } = createFakeSwitchComponent();
-        const { accessory } = createFakeAccessory();
+        const { accessory, context } = createFakeAccessory();
 
         switchHelper(component, accessory, createFakeApi());
 
-        expect(accessory.services).toHaveLength(1);
-        const service = accessory.services[0];
-        expect(service).toHaveProperty('UUID', SWITCH_SERVICE_UUID);
+        expect(context.services).toHaveLength(1);
+        const service = context.services[0];
+        expect(service).toHaveProperty('UUID', 'switch-service-uuid');
         expect(service).toHaveProperty('name', 'TestSwitch');
     });
 
     it('reuses an existing Switch service instead of adding one', () => {
         const { component } = createFakeSwitchComponent();
-        const existingService = { UUID: SWITCH_SERVICE_UUID, getCharacteristic: () => undefined };
-        const { accessory } = createFakeAccessory(existingService as unknown as PlatformAccessory['services'][number]);
+        const existingService = new SwitchService('TestSwitch');
+        const { accessory, context } = createFakeAccessory(existingService);
         const spyService = vi.spyOn(accessory, 'addService');
 
         switchHelper(component, accessory, createFakeApi());
 
         expect(spyService).not.toHaveBeenCalled();
+        expect(context.services).toHaveLength(1);
     });
 
     it('wires the On characteristic of the created service through onSet', () => {
@@ -173,8 +140,8 @@ describe('switchHelper', () => {
 
         switchHelper(component, accessory, createFakeApi());
 
-        const onCharacteristic = onCharacteristicOf(accessory);
-        expect(typeof onCharacteristic.setHandler).toBe('function');
+        const characteristic = onCharacteristicOf(accessory);
+        expect(typeof characteristic.setHandler).toBe('function');
     });
 
     describe('onSet handler behavior', () => {
@@ -184,9 +151,10 @@ describe('switchHelper', () => {
 
             switchHelper(component, accessory, createFakeApi());
 
-            const setHandler = onCharacteristicOf(accessory).setHandler;
-            ok(setHandler, 'expected the On onSet handler to be registered');
-            return { component, raw, turnOn, turnOff, setHandler, accessory };
+            const characteristic = onCharacteristicOf(accessory);
+            ok(characteristic.setHandler, 'expected the On onSet handler to be registered');
+            const setHandler = (value: CharacteristicValue): Promise<unknown> => invokeSet(value, characteristic);
+            return { component, raw, turnOn, turnOff, setHandler, characteristic, accessory };
         };
 
         it('turns the component on for truthy values when currently off', async () => {
@@ -235,21 +203,41 @@ describe('switchHelper', () => {
     });
 
     describe('state$ subscription lifecycle', () => {
-        it('stays subscribed after the helper returns and pushes remote state with setValue', () => {
+        it('stays subscribed after the helper returns and pushes remote state with setValue', async () => {
             const { component, raw, state$ } = createFakeSwitchComponent();
             const { accessory } = createFakeAccessory();
 
             switchHelper(component, accessory, createFakeApi());
 
-            const onCharacteristic = onCharacteristicOf(accessory);
+            const characteristic = onCharacteristicOf(accessory);
 
             raw.status = true;
             state$.next({});
-            expect(onCharacteristic.value).toBe(true);
+            // setValue re-enters onSet and stores only once the handler chain resolves.
+            await flush();
+            expect(characteristic.value).toBe(true);
 
             raw.status = false;
             state$.next({});
-            expect(onCharacteristic.value).toBe(false);
+            await flush();
+            expect(characteristic.value).toBe(false);
+        });
+
+        it('a setValue push re-enters the onSet handler, but the no-op guard prevents a command echo', async () => {
+            const { component, raw, state$, turnOn, turnOff } = createFakeSwitchComponent();
+            const { accessory } = createFakeAccessory();
+
+            switchHelper(component, accessory, createFakeApi());
+
+            const characteristic = onCharacteristicOf(accessory);
+
+            raw.status = true;
+            state$.next({});
+            await flush();
+            expect(characteristic.value).toBe(true);
+            // Pushed true already equals the component status, so the guard keeps both commands silent.
+            expect(turnOn).not.toHaveBeenCalled();
+            expect(turnOff).not.toHaveBeenCalled();
         });
     });
 });

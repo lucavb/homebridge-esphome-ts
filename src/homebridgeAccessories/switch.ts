@@ -1,32 +1,36 @@
-import { tap } from 'rxjs';
-import type { API, CharacteristicValue, PlatformAccessory } from 'homebridge';
-import { HAPStatus } from 'homebridge';
-import type { SwitchComponent } from 'esphome-ts';
+import type { API, PlatformAccessory } from 'homebridge';
+import { isSwitchComponent } from 'esphome-ts';
+import type { BaseComponent } from 'esphome-ts';
 
-export const switchHelper = (component: SwitchComponent, accessory: PlatformAccessory, api: API): boolean => {
-    const { Characteristic: CharacteristicClass, Service } = api.hap;
-    let service = accessory.services.find((service) => service.UUID === Service.Switch.UUID);
-    if (!service) {
-        service = accessory.addService(new Service.Switch(component.name, ''));
+import { bindComponent } from './componentBinding.js';
+import type { ComponentBinding } from './componentBinding.js';
+
+export const switchHelper = (
+    component: BaseComponent,
+    accessory: PlatformAccessory,
+    api: API,
+): (() => void) | undefined => {
+    if (!isSwitchComponent(component)) {
+        return undefined;
     }
 
-    component.state$
-        .pipe(tap(() => service?.getCharacteristic(CharacteristicClass.On)?.setValue(component.status)))
-        .subscribe();
-
-    service.getCharacteristic(CharacteristicClass.On)?.onSet(async (value: CharacteristicValue) => {
-        try {
-            if (component.status !== !!value) {
-                if (value) {
-                    component.turnOn();
-                } else {
-                    component.turnOff();
+    const bindings: ComponentBinding[] = [
+        {
+            service: api.hap.Service.Switch,
+            name: component.name,
+            characteristic: api.hap.Characteristic.On,
+            apply: (value) => {
+                if (component.status !== !!value) {
+                    if (value) {
+                        component.turnOn();
+                    } else {
+                        component.turnOff();
+                    }
                 }
-            }
-        } catch {
-            throw new api.hap.HapStatusError(HAPStatus.SERVICE_COMMUNICATION_FAILURE);
-        }
-    });
+            },
+            project: () => component.status,
+        },
+    ];
 
-    return true;
+    return bindComponent(component, accessory, api, bindings);
 };

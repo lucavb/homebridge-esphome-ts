@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import type { API, PlatformAccessory } from 'homebridge';
-import { Subject } from 'rxjs';
-import type { SensorComponent } from 'esphome-ts';
+import type { API } from 'homebridge';
+import { BehaviorSubject, filter } from 'rxjs';
+import { SensorComponent } from 'esphome-ts';
 
 import { sensorHelper } from './sensor.js';
-import { assertCharacteristic, makeFakeCharacteristicClass, makeFakeServiceClass } from '../testing/hapFakes.js';
-import type { FakeHapService } from '../testing/hapFakes.js';
+import {
+    assertCharacteristic,
+    createFakeAccessory,
+    makeFakeCharacteristicClass,
+    makeFakeServiceClass,
+} from '../testing/hapFakes.js';
 
 const CurrentTemperatureCharacteristic = makeFakeCharacteristicClass('current-temperature');
 const CurrentRelativeHumidityCharacteristic = makeFakeCharacteristicClass('current-relative-humidity');
@@ -32,23 +36,18 @@ const createFakeApi = () =>
         hap: { Service: ServiceClass, Characteristic: CharacteristicClass },
     }) as unknown as API;
 
-const createFakeAccessory = () => {
-    const context = { services: [] as FakeHapService[] };
-    const accessory = {
-        services: context.services,
-        addService(service: FakeHapService): FakeHapService {
-            context.services.push(service);
-            return service;
-        },
-    } as unknown as PlatformAccessory;
-    return { accessory, context };
-};
-
 const createFakeSensorComponent = (
-    overrides: Partial<Record<'unitOfMeasurement' | 'deviceClass' | 'icon', string>> = {},
+    overrides: Partial<Record<'unitOfMeasurement' | 'deviceClass' | 'icon' | 'name', string>> &
+        Partial<Record<'value', number | undefined>> = {},
 ) => {
-    const state$ = new Subject<unknown>();
-    const raw = {
+    /**
+     * Faithful to esphome-ts v4 state$: built from a BehaviorSubject(undefined) filtered on
+     * undefined, so late subscribers (each binding row) get the current state replayed at
+     * subscribe time (esphome-ts dist/index.js:2777, 2788).
+     */
+    const state = new BehaviorSubject<unknown>(undefined);
+    const state$ = state.pipe(filter((value) => value !== undefined));
+    const fields = {
         name: 'test sensor',
         unitOfMeasurement: 'lx',
         deviceClass: undefined as string | undefined,
@@ -57,43 +56,51 @@ const createFakeSensorComponent = (
         state$,
         ...overrides,
     };
+    /**
+     * Boundary fake: sits on the real SensorComponent.prototype (the helper narrows with
+     * instanceof) and shadows the getters with live fields the spec can mutate.
+     */
+    const component = Object.create(SensorComponent.prototype) as SensorComponent;
+    for (const key of Object.keys(fields)) {
+        Object.defineProperty(component, key, { enumerable: true, get: () => fields[key as keyof typeof fields] });
+    }
     return {
-        component: raw as unknown as SensorComponent,
-        raw,
-        state$,
+        component,
+        raw: fields,
+        state,
     };
 };
 
 describe('sensorHelper', () => {
-    it('returns false for unsupported sensors', () => {
+    it('returns undefined for unsupported sensors', () => {
         const { component } = createFakeSensorComponent({ unitOfMeasurement: 'V' });
         const { accessory } = createFakeAccessory();
-        expect(sensorHelper(component, accessory, createFakeApi())).toBe(false);
+        expect(sensorHelper(component, accessory, createFakeApi())).toBeUndefined();
     });
 
     it('adds a LightSensor service for a lux sensor and pushes measured values', () => {
-        const { component, raw, state$ } = createFakeSensorComponent();
+        const { component, raw, state } = createFakeSensorComponent();
         const { accessory, context } = createFakeAccessory();
 
-        expect(sensorHelper(component, accessory, createFakeApi())).toBe(true);
+        expect(sensorHelper(component, accessory, createFakeApi())).toBeTypeOf('function');
 
         expect(context.services).toHaveLength(1);
         expect(context.services[0]).toHaveProperty('UUID', 'light-sensor-service-uuid');
 
         raw.value = 123.45;
-        state$.next({});
+        state.next({});
         expect(assertCharacteristic(context.services[0], CurrentAmbientLightLevelCharacteristic).value).toBe(123.45);
     });
 
     it('maps an illuminance deviceClass onto the LightSensor as well', () => {
-        const { component, raw, state$ } = createFakeSensorComponent({ deviceClass: 'illuminance' });
+        const { component, raw, state } = createFakeSensorComponent({ deviceClass: 'illuminance' });
         const { accessory, context } = createFakeAccessory();
 
-        expect(sensorHelper(component, accessory, createFakeApi())).toBe(true);
+        expect(sensorHelper(component, accessory, createFakeApi())).toBeTypeOf('function');
         expect(context.services[0]).toHaveProperty('UUID', 'light-sensor-service-uuid');
 
         raw.value = 42;
-        state$.next({});
+        state.next({});
         expect(assertCharacteristic(context.services[0], CurrentAmbientLightLevelCharacteristic).value).toBe(42);
     });
 
@@ -102,7 +109,7 @@ describe('sensorHelper', () => {
         const zeroAccessory = createFakeAccessory();
         sensorHelper(zeroLux.component, zeroAccessory.accessory, createFakeApi());
         zeroLux.raw.value = 0;
-        zeroLux.state$.next({});
+        zeroLux.state.next({});
         expect(
             assertCharacteristic(zeroAccessory.context.services[0], CurrentAmbientLightLevelCharacteristic).value,
         ).toBe(0.0001);
@@ -111,7 +118,7 @@ describe('sensorHelper', () => {
         const negativeAccessory = createFakeAccessory();
         sensorHelper(negativeLux.component, negativeAccessory.accessory, createFakeApi());
         negativeLux.raw.value = -5;
-        negativeLux.state$.next({});
+        negativeLux.state.next({});
         expect(
             assertCharacteristic(negativeAccessory.context.services[0], CurrentAmbientLightLevelCharacteristic).value,
         ).toBe(0.0001);
@@ -120,32 +127,77 @@ describe('sensorHelper', () => {
         const blindingAccessory = createFakeAccessory();
         sensorHelper(blindingLux.component, blindingAccessory.accessory, createFakeApi());
         blindingLux.raw.value = 999_999;
-        blindingLux.state$.next({});
+        blindingLux.state.next({});
         expect(
             assertCharacteristic(blindingAccessory.context.services[0], CurrentAmbientLightLevelCharacteristic).value,
         ).toBe(100_000);
     });
 
     it('skips pushing while no measurement is available', () => {
-        const { component, state$ } = createFakeSensorComponent();
+        const { component, state } = createFakeSensorComponent();
         const { accessory, context } = createFakeAccessory();
 
         sensorHelper(component, accessory, createFakeApi());
-        state$.next({});
+        state.next({});
 
         expect(assertCharacteristic(context.services[0], CurrentAmbientLightLevelCharacteristic).value).toBeUndefined();
     });
 
     it('keeps the fahrenheit temperature path intact', () => {
-        const { component, raw, state$ } = createFakeSensorComponent({ unitOfMeasurement: '°F' });
+        const { component, raw, state } = createFakeSensorComponent({ unitOfMeasurement: '°F' });
         const { accessory, context } = createFakeAccessory();
 
-        expect(sensorHelper(component, accessory, createFakeApi())).toBe(true);
+        expect(sensorHelper(component, accessory, createFakeApi())).toBeTypeOf('function');
         expect(context.services[0]).toHaveProperty('UUID', 'temperature-service-uuid');
 
         raw.value = 68;
-        state$.next({});
+        state.next({});
         // (68 - 32) * 5 / 9 = 20 °C
         expect(assertCharacteristic(context.services[0], CurrentTemperatureCharacteristic).value).toBeCloseTo(20);
+    });
+
+    it('binds a water-percent icon humidity sensor and pushes CurrentRelativeHumidity', () => {
+        const { component, raw, state } = createFakeSensorComponent({
+            unitOfMeasurement: '%',
+            icon: 'mdi:water-percent',
+        });
+        const { accessory, context } = createFakeAccessory();
+
+        // The helper returns the teardown (a defined function), not undefined.
+        expect(sensorHelper(component, accessory, createFakeApi())).toBeTypeOf('function');
+        expect(context.services).toHaveLength(1);
+        expect(context.services[0]).toHaveProperty('UUID', 'humidity-service-uuid');
+
+        raw.value = 55;
+        state.next({});
+        expect(assertCharacteristic(context.services[0], CurrentRelativeHumidityCharacteristic).value).toBe(55);
+    });
+
+    it('binds a humidity deviceClass sensor the same way without the icon (the other disjunct)', () => {
+        const { component, raw, state } = createFakeSensorComponent({
+            unitOfMeasurement: '%',
+            deviceClass: 'humidity',
+        });
+        const { accessory, context } = createFakeAccessory();
+
+        expect(sensorHelper(component, accessory, createFakeApi())).toBeTypeOf('function');
+        expect(context.services).toHaveLength(1);
+        expect(context.services[0]).toHaveProperty('UUID', 'humidity-service-uuid');
+
+        raw.value = 48;
+        state.next({});
+        expect(assertCharacteristic(context.services[0], CurrentRelativeHumidityCharacteristic).value).toBe(48);
+    });
+
+    it('skips the °F push while no measurement is available, so NaN can never reach the characteristic', () => {
+        const { component, state } = createFakeSensorComponent({ unitOfMeasurement: '°F', value: undefined });
+        const { accessory, context } = createFakeAccessory();
+
+        expect(sensorHelper(component, accessory, createFakeApi())).toBeTypeOf('function');
+
+        // project deliberately returns undefined for a missing value: the (x-32) * 5 / 9 °F
+        // conversion must never push NaN. The characteristic's value stays untouched.
+        state.next({});
+        expect(assertCharacteristic(context.services[0], CurrentTemperatureCharacteristic).value).toBeUndefined();
     });
 });

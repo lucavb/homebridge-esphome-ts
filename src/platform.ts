@@ -169,13 +169,15 @@ export class EsphomePlatform implements DynamicPlatformPlugin {
                 accessory = new this.api.platformAccessory(component.name, uuid);
                 newAccessory = true;
             }
-            if (!componentHelper(component, accessory, this.api)) {
+            const teardown = componentHelper(component, accessory, this.api);
+            if (!teardown) {
                 this.log(`${component.name} could not be mapped to HomeKit. Please file an issue on Github.`);
                 if (!newAccessory) {
                     this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
                 }
                 continue;
             }
+            this.subscription.add(teardown);
 
             // Registration key so a cached accessory re-associates with this host on restore.
             accessory.context.host = host;

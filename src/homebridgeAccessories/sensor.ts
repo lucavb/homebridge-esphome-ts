@@ -1,6 +1,8 @@
-import { tap } from 'rxjs';
 import type { API, Characteristic, PlatformAccessory, Service } from 'homebridge';
-import type { SensorComponent } from 'esphome-ts';
+import { SensorComponent } from 'esphome-ts';
+import type { BaseComponent } from 'esphome-ts';
+
+import { bindComponent } from './componentBinding.js';
 
 const fahrenheitUnit = '°F';
 
@@ -20,27 +22,6 @@ interface ValueClamp {
 
 const clampTo = (value: number, clamp: ValueClamp): number => Math.max(clamp.min, Math.min(clamp.max, value));
 
-export const sensorHelper = (component: SensorComponent, accessory: PlatformAccessory, api: API): boolean => {
-    const { Characteristic: CharacteristicClass, Service: ServiceClass } = api.hap;
-    if (isTemperatureComponent(component.unitOfMeasurement)) {
-        defaultSetup(component, accessory, ServiceClass.TemperatureSensor, CharacteristicClass.CurrentTemperature);
-        return true;
-    } else if (
-        component.unitOfMeasurement === '%' &&
-        (component.icon === 'mdi:water-percent' || component.deviceClass === 'humidity')
-    ) {
-        defaultSetup(component, accessory, ServiceClass.HumiditySensor, CharacteristicClass.CurrentRelativeHumidity);
-        return true;
-    } else if (component.unitOfMeasurement === 'lx' || component.deviceClass === 'illuminance') {
-        defaultSetup(component, accessory, ServiceClass.LightSensor, CharacteristicClass.CurrentAmbientLightLevel, {
-            min: MIN_AMBIENT_LIGHT_LUX,
-            max: MAX_AMBIENT_LIGHT_LUX,
-        });
-        return true;
-    }
-    return false;
-};
-
 type SelectedServiceType =
     typeof Service.TemperatureSensor | typeof Service.HumiditySensor | typeof Service.LightSensor;
 type SelectedCharacteristicType =
@@ -48,35 +29,76 @@ type SelectedCharacteristicType =
     | typeof Characteristic.CurrentRelativeHumidity
     | typeof Characteristic.CurrentAmbientLightLevel;
 
-const defaultSetup = (
+export const sensorHelper = (
+    component: BaseComponent,
+    accessory: PlatformAccessory,
+    api: API,
+): (() => void) | undefined => {
+    if (!(component instanceof SensorComponent)) {
+        return undefined;
+    }
+    const { Characteristic: CharacteristicClass, Service: ServiceClass } = api.hap;
+    if (isTemperatureComponent(component.unitOfMeasurement)) {
+        return setupRow(
+            component,
+            accessory,
+            api,
+            ServiceClass.TemperatureSensor,
+            CharacteristicClass.CurrentTemperature,
+        );
+    } else if (
+        component.unitOfMeasurement === '%' &&
+        (component.icon === 'mdi:water-percent' || component.deviceClass === 'humidity')
+    ) {
+        return setupRow(
+            component,
+            accessory,
+            api,
+            ServiceClass.HumiditySensor,
+            CharacteristicClass.CurrentRelativeHumidity,
+        );
+    } else if (component.unitOfMeasurement === 'lx' || component.deviceClass === 'illuminance') {
+        return setupRow(
+            component,
+            accessory,
+            api,
+            ServiceClass.LightSensor,
+            CharacteristicClass.CurrentAmbientLightLevel,
+            {
+                min: MIN_AMBIENT_LIGHT_LUX,
+                max: MAX_AMBIENT_LIGHT_LUX,
+            },
+        );
+    }
+    return undefined;
+};
+
+const setupRow = (
     component: SensorComponent,
     accessory: PlatformAccessory,
+    api: API,
     SelectedService: SelectedServiceType,
     SelectedCharacteristic: SelectedCharacteristicType,
     clamp?: ValueClamp,
-): void => {
-    let sensorService: InstanceType<SelectedServiceType> | undefined = accessory.services.find(
-        (service) => service.UUID === SelectedService.UUID,
-    );
-    if (!sensorService) {
-        sensorService = accessory.addService(new SelectedService(component.name, ''));
-    }
+): (() => void) => {
     const valuesAreFahrenheit = component.unitOfMeasurement === fahrenheitUnit;
 
-    component.state$
-        .pipe(
-            tap(() => {
+    return bindComponent(component, accessory, api, [
+        {
+            service: SelectedService,
+            name: component.name,
+            characteristic: SelectedCharacteristic,
+            project: () => {
                 const convertedValue =
                     valuesAreFahrenheit && component.value !== undefined
                         ? fahrenheitToCelsius(component.value)
                         : component.value;
                 if (convertedValue === undefined) {
                     // No measurement yet; silently skip so a throw cannot kill the state$ subscription.
-                    return;
+                    return undefined;
                 }
-                const characteristicValue = clamp === undefined ? convertedValue : clampTo(convertedValue, clamp);
-                sensorService?.getCharacteristic(SelectedCharacteristic)?.setValue(characteristicValue);
-            }),
-        )
-        .subscribe();
+                return clamp === undefined ? convertedValue : clampTo(convertedValue, clamp);
+            },
+        },
+    ]);
 };
