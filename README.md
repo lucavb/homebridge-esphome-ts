@@ -10,9 +10,15 @@ Supported components include:
 - Switches
 - BinarySensors (motion, window, door, smoke and leakage)
 - Sensors (temperature & humidity at the moment)
+- LightSensors (illuminance)
 
 This project is currently still in beta, but I thought that many eyes see more than just
 my two :)
+
+Every exposed accessory carries a `StatusActive` characteristic: it is true while the connection
+to the esphome device is up and false while it is down, in which case HomeKit flags the values
+as stale. Accessories restored from Homebridge's cache regain status sync once the device
+reconnects.
 
 ## Requirements
 

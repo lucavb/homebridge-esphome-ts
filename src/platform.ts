@@ -3,6 +3,7 @@ import { concat, from, interval, Observable, EMPTY, Subscription } from 'rxjs';
 import { TimeoutError, catchError, filter, map, mergeMap, take, tap, timeout } from 'rxjs';
 import { componentHelpers } from './homebridgeAccessories/componentHelpers.js';
 import { PLATFORM_NAME, PLUGIN_NAME } from './constants.js';
+import { applyConnectionStatus, watchDeviceConnection } from './shared/connectionStatus.js';
 import { writeReadDataToLogFile } from './shared/index.js';
 import { EspDevice, InvalidPasswordError } from 'esphome-ts';
 import { discoverDevices } from './discovery.js';
@@ -31,6 +32,12 @@ export class EsphomePlatform implements DynamicPlatformPlugin {
     protected readonly blacklistSet: Set<string>;
     protected readonly subscription: Subscription;
     protected readonly accessories: PlatformAccessory[] = [];
+    /** Accessories previously set up from a device's components, keyed by its configured host.
+     * Cached accessories re-associate with their host via `accessory.context.host` when they
+     * are restored from Homebridge's disk cache in `configureAccessory`. */
+    protected readonly accessoriesByHost = new Map<string, PlatformAccessory[]>();
+    /** Last known alive state per host, to keep freshly added accessories in sync. */
+    protected readonly aliveStateByHost = new Map<string, boolean>();
 
     constructor(
         protected readonly log: Logging,
@@ -89,6 +96,9 @@ export class EsphomePlatform implements DynamicPlatformPlugin {
                 .pipe(
                     mergeMap((deviceConfig) => {
                         const device = new EspDevice(deviceConfig.host, deviceConfig.password, deviceConfig.port);
+                        // Track openings for terminate() on shutdown; devices were previously created
+                        // but never pushed, making the shutdown loop a no-op.
+                        this.espDevices.push(device);
                         if (this.config.debug) {
                             this.log('Writing the raw data from your ESP Device to /tmp');
                             writeReadDataToLogFile(deviceConfig.host, device);
@@ -110,11 +120,17 @@ export class EsphomePlatform implements DynamicPlatformPlugin {
                                 }
                             }),
                         );
+                        this.subscription.add(
+                            watchDeviceConnection(deviceConfig.host, device, this.log, this.api, {
+                                accessoriesOfDevice: () => this.accessoriesByHost.get(deviceConfig.host) ?? [],
+                                onStateChange: (alive) => this.aliveStateByHost.set(deviceConfig.host, alive),
+                            }),
+                        );
                         return device.discovery$.pipe(
                             filter((value: boolean) => value),
                             take(1),
                             timeout(10 * 1000),
-                            tap(() => this.addAccessories(device)),
+                            tap(() => this.addAccessories(device, deviceConfig.host)),
                             catchError((err) => {
                                 if (err instanceof TimeoutError) {
                                     this.log.warn(
@@ -130,7 +146,7 @@ export class EsphomePlatform implements DynamicPlatformPlugin {
         );
     }
 
-    private addAccessories(device: EspDevice): void {
+    private addAccessories(device: EspDevice, host: string): void {
         for (const key of Object.keys(device.components)) {
             const component = device.components[key];
             if (this.blacklistSet.has(component.name)) {
@@ -160,18 +176,44 @@ export class EsphomePlatform implements DynamicPlatformPlugin {
                 continue;
             }
 
+            // Registration key so a cached accessory re-associates with this host on restore.
+            accessory.context.host = host;
+
             this.log(`${component.name} discovered and setup.`);
             if (accessory && newAccessory) {
                 this.accessories.push(accessory);
                 this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
             }
+            const hostAccessories = this.accessoriesByHost.get(host) ?? [];
+            if (!hostAccessories.includes(accessory)) {
+                hostAccessories.push(accessory);
+                this.accessoriesByHost.set(host, hostAccessories);
+            }
         }
         this.logIfDebug(device.components);
+        // Keep freshly added accessories in sync with the last known connection state of this device.
+        applyConnectionStatus(
+            this.accessoriesByHost.get(host) ?? [],
+            this.aliveStateByHost.get(host) ?? true,
+            this.api,
+        );
     }
 
     public configureAccessory(accessory: PlatformAccessory): void {
         if (!this.blacklistSet.has(accessory.displayName)) {
-            this.accessories.push(accessory);
+            // Homebridge may hand the same cached accessory over twice; guard against duplicates.
+            if (!this.accessories.includes(accessory)) {
+                this.accessories.push(accessory);
+            }
+            // Re-associate the cached accessory with its host for connection-status sync.
+            const host = accessory.context.host; // persisted at registration; older disk caches may lack it
+            if (typeof host === 'string') {
+                const hostAccessories = this.accessoriesByHost.get(host) ?? [];
+                if (!hostAccessories.includes(accessory)) {
+                    hostAccessories.push(accessory);
+                    this.accessoriesByHost.set(host, hostAccessories);
+                }
+            }
             this.logIfDebug(`cached accessory ${accessory.displayName} was added`);
         } else {
             this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
