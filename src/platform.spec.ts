@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Mock } from 'vitest';
 import type { API, CharacteristicValue, Logging, PlatformAccessory, PlatformConfig } from 'homebridge';
-import { BehaviorSubject, Subject } from 'rxjs';
+import { BehaviorSubject, Subject, type Observable } from 'rxjs';
 // The class below is the *mocked* InvalidPasswordError from the vi.mock('esphome-ts') factory;
 // importing it via the same specifier hands back the mock class for instanceof-friendly emission.
 import { InvalidPasswordError } from 'esphome-ts';
@@ -23,10 +23,11 @@ vi.mock('esphome-ts', () => {
     class MockEspDevice {
         public readonly error$ = new Subject<Error>();
         public readonly discovery$ = new Subject<boolean>();
-        // Faithful to esphome-ts v4: alive$ merges socket.connected$, which is a
-        // BehaviorSubject(false) (dist/index.js:2494), and is buffered/piped with
-        // distinctUntilChanged + shareReplay(1) (dist/index.js:3277-3281) — every subscriber
-        // synchronously receives the buffered false at subscribe time.
+        // Faithful to esphome-ts v5: alive$ merges socket.connected$, which is a
+        // BehaviorSubject(false) (dist/index.js:2499), and is buffered/piped with
+        // distinctUntilChanged + shareReplay({ bufferSize: 1, refCount: true })
+        // (dist/index.js:3351-3359) — every subscriber synchronously receives the buffered
+        // false at subscribe time.
         public readonly alive$ = new BehaviorSubject<boolean>(false);
         public readonly components: Record<string, { name: string; type: string }> = {};
         public readonly provideRetryObservable = vi.fn();
@@ -270,7 +271,7 @@ const createFakeApi = () => {
 };
 
 interface PlatformSetupOptions {
-    devices?: Array<{ host: string; password?: string; port?: number }>;
+    devices?: Array<{ host: string; password?: string; port?: number; retryAfter?: number }>;
     blacklist?: string[];
     debug?: boolean;
 }
@@ -423,6 +424,34 @@ describe('EsphomePlatform', () => {
         device.error$.next(new Error('boom'));
         expect(debug).toHaveBeenCalledWith(expect.stringContaining('esp-one.local'), expect.anything());
         expect(error).toHaveBeenCalledTimes(1); // plain errors never go to the error log
+    });
+
+    it('stops the retry cadence when the device rejects the password', () => {
+        // esphome-ts 5 latches an InvalidPasswordError as terminal, so the retry cadence the
+        // platform provides must complete instead of ticking futile reconnect logs forever.
+        vi.useFakeTimers();
+        try {
+            const { info, didFinishLaunching } = createPlatform({
+                devices: [{ host: 'esp-one.local', password: 'secret', retryAfter: 1000 }],
+            });
+            didFinishLaunching();
+            const device = espDeviceAt(0);
+            const retry$ = device.provideRetryObservable.mock.calls[0]?.[0] as Observable<unknown>;
+            const emissions: unknown[] = [];
+            const subscription = retry$.subscribe((value) => emissions.push(value));
+
+            vi.advanceTimersByTime(2000);
+            expect(emissions).toHaveLength(2);
+            expect(info).toHaveBeenCalledWith(expect.stringContaining('Trying to reconnect'));
+
+            device.error$.next(new InvalidPasswordError('esp-one.local'));
+            expect(subscription.closed).toBe(true);
+
+            vi.advanceTimersByTime(5000);
+            expect(emissions).toHaveLength(2); // the latch keeps the cadence stopped
+        } finally {
+            vi.useRealTimers();
+        }
     });
 
     it('syncs the last known connection state into freshly added accessories', () => {

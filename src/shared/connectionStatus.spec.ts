@@ -103,11 +103,11 @@ describe('watchDeviceConnection', () => {
     const setup = () => {
         const log = createFakeLogging();
         const api = createFakeApi();
-        // Faithful to esphome-ts v4: alive$ is distinctUntilChanged + shareReplay(1) over a merge whose
+        // Faithful to esphome-ts v5: alive$ is distinctUntilChanged + shareReplay over a merge whose
         // connected$ source is a BehaviorSubject(false) — every subscriber synchronously receives the
-        // buffered false at subscribe time (esphome-ts dist/index.js:2494, 3277-3281).
+        // buffered false at subscribe time (esphome-ts dist/index.js:2499, 3351-3359).
         const connected = new BehaviorSubject<boolean>(false);
-        const alive$ = connected.pipe(distinctUntilChanged(), shareReplay(1));
+        const alive$ = connected.pipe(distinctUntilChanged(), shareReplay({ bufferSize: 1, refCount: true }));
         const sensorService = new SensorService();
         const accessories: PlatformAccessory[] = [platformAccessoryWith(sensorService)];
         const onStateChange = vi.fn();

@@ -31,9 +31,10 @@ const createFakeApi = () =>
 
 const createFakeSwitchComponent = (options?: { throwOnCall?: boolean }) => {
     /**
-     * Faithful to esphome-ts v4 state$: built from a BehaviorSubject(undefined) filtered on
+     * Faithful to esphome-ts v5 state$: built from a BehaviorSubject(undefined) filtered on
      * undefined, so late subscribers (each binding row) get the current state replayed at
-     * subscribe time (esphome-ts dist/index.js:2777, 2788).
+     * subscribe time (esphome-ts dist/index.js:2837, 2819-2826). v5 shallow-compare dedup drops
+     * identical re-sent states upstream of the contract this fake models.
      */
     const state = new BehaviorSubject<unknown>(undefined);
     const state$ = state.pipe(filter((value) => value !== undefined));
@@ -52,8 +53,8 @@ const createFakeSwitchComponent = (options?: { throwOnCall?: boolean }) => {
     /**
      * Boundary fake: sits on the real SwitchComponent.prototype and shadows the live surface the
      * helper reads. The guard stays on the library: isSwitchComponent narrows with
-     * `component.type === 'switch'` (esphome-ts dist/index.js:3338), and SwitchComponent serves
-     * that from a prototype getter returning 'switch' (dist/index.js:3084-3086), so the inherited
+     * `component.type === 'switch'` (esphome-ts dist/index.js:3429), and SwitchComponent serves
+     * that from a prototype getter returning 'switch' (dist/index.js:3133-3135), so the inherited
      * getter satisfies isSwitchComponent — no spec-owned 'type' property is needed.
      */
     const component = Object.create(SwitchComponent.prototype) as SwitchComponent;
@@ -100,8 +101,8 @@ const invokeSet = async (value: CharacteristicValue, characteristic: FakeHapChar
 describe('switchHelper', () => {
     it('returns undefined for a component failing the isSwitchComponent guard without touching the accessory', () => {
         // A plain object is not on SwitchComponent.prototype; the guard checks
-        // `component.type === 'switch'` (esphome-ts dist/index.js:3338), which a bare object
-        // never satisfies (its own `type` getter lives on the prototype, dist/index.js:3084-3086).
+        // `component.type === 'switch'` (esphome-ts dist/index.js:3429), which a bare object
+        // never satisfies (its own `type` getter lives on the prototype, dist/index.js:3133-3135).
         const impostor = { name: 'impostor' } as unknown as BaseComponent;
         const { accessory, context } = createFakeAccessory();
 

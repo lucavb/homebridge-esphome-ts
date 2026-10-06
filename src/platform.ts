@@ -1,7 +1,7 @@
 import type { API, DynamicPlatformPlugin, Logging, PlatformAccessory, PlatformConfig } from 'homebridge';
 import type { Observable } from 'rxjs';
 import { concat, from, interval, EMPTY, Subscription } from 'rxjs';
-import { TimeoutError, catchError, filter, map, mergeMap, take, tap, timeout } from 'rxjs';
+import { TimeoutError, catchError, filter, map, mergeMap, take, takeUntil, tap, timeout } from 'rxjs';
 import { componentHelpers } from './homebridgeAccessories/componentHelpers.js';
 import { PLATFORM_NAME, PLUGIN_NAME } from './constants.js';
 import { applyConnectionStatus, watchDeviceConnection } from './shared/connectionStatus.js';
@@ -104,8 +104,16 @@ export class EsphomePlatform implements DynamicPlatformPlugin {
                             this.log('Writing the raw data from your ESP Device to /tmp');
                             writeReadDataToLogFile(deviceConfig.host, device);
                         }
+                        // esphome-ts 5 latches a rejected password as terminal (the password is
+                        // fixed at construction), so ticks after an InvalidPasswordError can
+                        // never reconnect — stop the cadence then instead of logging futile attempts.
+                        const passwordRejected$ = device.error$.pipe(
+                            filter((error): error is InvalidPasswordError => error instanceof InvalidPasswordError),
+                            take(1),
+                        );
                         device.provideRetryObservable(
                             interval(deviceConfig.retryAfter ?? this.config.retryAfter ?? DEFAULT_RETRY_AFTER).pipe(
+                                takeUntil(passwordRejected$),
                                 tap(() => this.log.info(`Trying to reconnect now to device ${deviceConfig.host}`)),
                             ),
                         );

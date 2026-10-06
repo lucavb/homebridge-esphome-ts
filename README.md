@@ -71,6 +71,10 @@ Both `retryAfter` keys are as explained optional and need to contain an integer 
 after what time frame it should try to reconnect. Keep in mind that this value needs to be in _milliseconds_. The inner
 `retryAfter` will trump the outer value if present. The default value is 90 seconds.
 
+A device that rejects the configured password stops retrying entirely: esphome-ts treats the rejection
+as terminal because the password cannot change while the device is running. Fix the `password` in your
+config and restart homebridge to reconnect.
+
 ### Blacklisting
 
 If for some reason you want to exclude a specific component from this plugin just

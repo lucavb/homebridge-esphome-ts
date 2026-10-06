@@ -52,7 +52,7 @@ export const applyConnectionStatus = (accessories: PlatformAccessory[], active: 
  * - `false` (connection lost): log.warn + StatusActive=false on all services.
  * - `true` (reconnected): log.info + StatusActive=true on all services.
  *
- * esphome-ts v4 buffers an initial `false` per subscriber, so log lines are only emitted
+ * esphome-ts v5 buffers an initial `false` per subscriber, so log lines are only emitted
  * after the first successful connection — the startup-offline case is covered by the
  * platform's own "could not be reached" warning.
  *
