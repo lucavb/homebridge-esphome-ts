@@ -1,0 +1,46 @@
+name: Release
+
+on:
+    push:
+        branches:
+            - master
+            - beta
+    workflow_dispatch:
+
+permissions:
+    contents: write # to be able to publish a GitHub release
+    issues: write # to be able to comment on released issues
+    pull-requests: write # to be able to comment on released pull requests
+    id-token: write # to enable use of OIDC for npm provenance
+
+jobs:
+    release:
+        name: Release
+        runs-on: ubuntu-latest
+        timeout-minutes: 15
+        if: "!startsWith(github.event.head_commit.message, '[skip release]')"
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  fetch-depth: 0 # Fetch all history for all tags and branches
+
+            - name: Use Node.js
+              uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+              with:
+                  node-version: '24'
+
+            - name: Install dependencies
+              run: npm ci
+
+            - name: Verify
+              run: npm run verify
+
+            - name: Upgrade npm for OIDC trusted publishing
+              run: npm install -g npm@latest
+
+            - name: Release
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              run: npx semantic-release
