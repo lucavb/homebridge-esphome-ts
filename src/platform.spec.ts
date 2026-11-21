@@ -574,4 +574,129 @@ describe('EsphomePlatform', () => {
         espDeviceAt(0).error$.next(new InvalidPasswordError('esp-one.local'));
         expect(error).not.toHaveBeenCalled(); // subscription unsubscribed: no logging anymore
     });
+
+    it('binds a device discovered after the timeout warning and warns only once', () => {
+        vi.useFakeTimers();
+        try {
+            const helper = vi.fn(() => () => {});
+            setupComponentHelper('light', helper);
+            const { warn, registerPlatformAccessories, didFinishLaunching } = createPlatform({
+                devices: [{ host: 'esp-one.local' }],
+            });
+            didFinishLaunching();
+            const device = espDeviceAt(0);
+            addComponent(device, 'office-light', 'light');
+
+            vi.advanceTimersByTime(10_000);
+            expect(warn).toHaveBeenCalledTimes(1);
+
+            // A delayed discovery remains subscribed, while the timeout diagnostic is one-shot.
+            vi.advanceTimersByTime(20_000);
+            expect(warn).toHaveBeenCalledTimes(1);
+            device.discovery$.next(true);
+            device.discovery$.next(true);
+
+            expect(helper).toHaveBeenCalledTimes(1);
+            expect(registerPlatformAccessories).toHaveBeenCalledTimes(1);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('binds a prompt discovery without emitting a timeout warning', () => {
+        vi.useFakeTimers();
+        try {
+            const helper = vi.fn(() => () => {});
+            setupComponentHelper('light', helper);
+            const { warn, registerPlatformAccessories, didFinishLaunching } = createPlatform({
+                devices: [{ host: 'esp-one.local' }],
+            });
+            didFinishLaunching();
+            const device = espDeviceAt(0);
+            addComponent(device, 'office-light', 'light');
+            device.discovery$.next(true);
+
+            vi.advanceTimersByTime(10_000);
+
+            expect(helper).toHaveBeenCalledTimes(1);
+            expect(registerPlatformAccessories).toHaveBeenCalledTimes(1);
+            expect(warn).not.toHaveBeenCalled();
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('binds only once when discovery emits true multiple times', () => {
+        const helper = vi.fn(() => () => {});
+        setupComponentHelper('light', helper);
+        const { registerPlatformAccessories, didFinishLaunching } = createPlatform({
+            devices: [{ host: 'esp-one.local' }],
+        });
+        didFinishLaunching();
+        const device = espDeviceAt(0);
+        addComponent(device, 'office-light', 'light');
+
+        device.discovery$.next(true);
+        device.discovery$.next(true);
+        device.discovery$.next(true);
+
+        expect(helper).toHaveBeenCalledTimes(1);
+        expect(registerPlatformAccessories).toHaveBeenCalledTimes(1);
+    });
+
+    it('cancels pending discovery setup when Homebridge shuts down', () => {
+        vi.useFakeTimers();
+        try {
+            const helper = vi.fn(() => () => {});
+            setupComponentHelper('light', helper);
+            const { warn, registerPlatformAccessories, didFinishLaunching, shutdown } = createPlatform({
+                devices: [{ host: 'esp-one.local' }],
+            });
+            didFinishLaunching();
+            const device = espDeviceAt(0);
+            addComponent(device, 'office-light', 'light');
+
+            vi.advanceTimersByTime(10_000);
+            expect(warn).toHaveBeenCalledTimes(1);
+
+            shutdown();
+            device.discovery$.next(true);
+            vi.advanceTimersByTime(20_000);
+
+            expect(helper).not.toHaveBeenCalled();
+            expect(registerPlatformAccessories).not.toHaveBeenCalled();
+            expect(warn).toHaveBeenCalledTimes(1);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('continues setting up other devices when a component helper throws', () => {
+        const successfulHelper = vi.fn(() => () => {});
+        setupComponentHelper(
+            'broken-light',
+            vi.fn(() => {
+                throw new Error('component setup failed');
+            }),
+        );
+        setupComponentHelper('light', successfulHelper);
+        const { error, registerPlatformAccessories, didFinishLaunching } = createPlatform({
+            devices: [{ host: 'esp-one.local' }, { host: 'esp-two.local' }],
+        });
+        didFinishLaunching();
+        const firstDevice = espDeviceAt(0);
+        const secondDevice = espDeviceAt(1);
+        addComponent(firstDevice, 'broken-component', 'broken-light');
+        addComponent(secondDevice, 'office-light', 'light');
+
+        firstDevice.discovery$.next(true);
+        secondDevice.discovery$.next(true);
+
+        expect(successfulHelper).toHaveBeenCalledTimes(1);
+        expect(registerPlatformAccessories).toHaveBeenCalledTimes(1);
+        expect(error).toHaveBeenCalledWith(
+            expect.stringContaining('Error while discovering or setting up accessories'),
+            expect.any(Error),
+        );
+    });
 });

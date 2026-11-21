@@ -1,7 +1,7 @@
 import type { API, DynamicPlatformPlugin, Logging, PlatformAccessory, PlatformConfig } from 'homebridge';
 import type { Observable } from 'rxjs';
 import { concat, from, interval, EMPTY, Subscription } from 'rxjs';
-import { TimeoutError, catchError, filter, map, mergeMap, take, takeUntil, tap, timeout } from 'rxjs';
+import { catchError, filter, map, mergeMap, take, takeUntil, tap, timeout } from 'rxjs';
 import { componentHelpers } from './homebridgeAccessories/componentHelpers.js';
 import { PLATFORM_NAME, PLUGIN_NAME } from './constants.js';
 import { applyConnectionStatus, watchDeviceConnection } from './shared/connectionStatus.js';
@@ -138,14 +138,24 @@ export class EsphomePlatform implements DynamicPlatformPlugin {
                         return device.discovery$.pipe(
                             filter((value: boolean) => value),
                             take(1),
-                            timeout(10 * 1000),
-                            tap(() => this.addAccessories(device, deviceConfig.host)),
-                            catchError((err) => {
-                                if (err instanceof TimeoutError) {
+                            timeout({
+                                first: 10 * 1000,
+                                with: () => {
                                     this.log.warn(
                                         `The device under the host ${deviceConfig.host} could not be reached.`,
                                     );
-                                }
+                                    return device.discovery$.pipe(
+                                        filter((value: boolean) => value),
+                                        take(1),
+                                    );
+                                },
+                            }),
+                            tap(() => this.addAccessories(device, deviceConfig.host)),
+                            catchError((error: unknown) => {
+                                this.log.error(
+                                    `Error while discovering or setting up accessories for device ${deviceConfig.host}.`,
+                                    error,
+                                );
                                 return EMPTY;
                             }),
                         );
