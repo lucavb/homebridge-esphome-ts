@@ -4,7 +4,7 @@ import { componentHelpers } from './componentHelpers.js';
 
 describe('componentHelpers', () => {
     it('registers a helper for every supported component type', () => {
-        expect([...componentHelpers.keys()].sort()).toEqual(['binarySensor', 'light', 'sensor', 'switch']);
+        expect([...componentHelpers.keys()].sort()).toEqual(['binarySensor', 'cover', 'light', 'sensor', 'switch']);
     });
 
     it('maps each component type to a function helper', () => {

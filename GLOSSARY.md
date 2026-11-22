@@ -9,7 +9,7 @@ A single ESPHome node reachable at a host and port, owning a set of components.
 _Avoid_: ESP, node, board
 
 **Component**:
-One addressable capability of a device: light, switch, binary sensor, or sensor.
+One addressable capability of a device: light, switch, binary sensor, sensor, or cover.
 _Avoid_: entity, channel
 
 **Accessory**:
