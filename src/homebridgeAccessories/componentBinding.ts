@@ -4,6 +4,12 @@ import type { BaseComponent } from 'esphome-ts';
 
 type ServiceConstructor = (new (displayName?: string, subtype?: string) => Service) & { readonly UUID: string };
 
+/** Per-device knobs that must reach a helper. Helpers that do not need them ignore the argument. */
+export interface ComponentHelperOptions {
+    /** Swap HomeKit clockwise/counter-clockwise because ESPHome forward/reverse is wiring-dependent. */
+    readonly invertFanDirection?: boolean;
+}
+
 /**
  * The mapping that attaches one component onto an accessory: which service, which
  * characteristics, how state is read, applied, and pushed (GLOSSARY: component binding).
@@ -17,7 +23,7 @@ export interface ComponentBinding {
     readonly service: ServiceConstructor;
     /** Display name used when the service is added to the accessory. */
     readonly name: string;
-    /** Optional service subtype (light effect switches). */
+    /** Optional service subtype (light effect switches, fan presets). */
     readonly subtype?: string;
     readonly characteristic: WithUUID<new (...args: never[]) => Characteristic>;
     /** Wired as `onGet`; omit to leave the characteristic without a getter. */
@@ -30,7 +36,8 @@ export interface ComponentBinding {
      * (such as light's row-state projection) under strictFunctionTypes.
      */
     project?(state: unknown): CharacteristicValue | undefined;
-    /** After a successful apply, sibling rows of the same group get updateValue(false) (light effect switches). */
+    /** Radio group id; a successful apply that selects this row pushes updateValue(false) to
+     * siblings (light effects, fan presets). */
     readonly radioGroup?: string;
 }
 
@@ -93,7 +100,10 @@ export const bindComponent = (
             characteristic.onSet(async (value: CharacteristicValue) => {
                 try {
                     await apply(value);
-                    if (row.radioGroup) {
+                    // Only a write that selects this row silences its siblings. A false/0 write
+                    // deselects it; pushing siblings then would turn off whichever row is active
+                    // even though the device was not touched (fan presets no-op an inactive off).
+                    if (row.radioGroup && value) {
                         pushSiblings(row, false);
                     }
                 } catch {

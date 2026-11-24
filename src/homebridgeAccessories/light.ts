@@ -105,7 +105,12 @@ export const lightHelper = (
                 subtype: `${effect} Switch`,
                 characteristic: CharacteristicClass.On,
                 apply: (on) => {
-                    component.effect = on ? effect : NO_EFFECT;
+                    if (on) {
+                        component.effect = effect;
+                    } else if (component.effect === effect) {
+                        // Turning off an inactive effect must not clear whichever effect is active.
+                        component.effect = NO_EFFECT;
+                    }
                 },
                 project: (state: LightStateEvent) => state.effect === effect,
                 radioGroup: `${component.name}-effects`,

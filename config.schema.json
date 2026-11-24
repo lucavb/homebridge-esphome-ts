@@ -31,6 +31,12 @@
                             "type": "string",
                             "required": false,
                             "placeholder": "Base64 key from ESPHome"
+                        },
+                        "invertFanDirection": {
+                            "title": "Invert fan direction",
+                            "description": "Swap clockwise and counter-clockwise for fans whose forward/reverse wiring is reversed.",
+                            "type": "boolean",
+                            "required": false
                         }
                     }
                 }
@@ -69,7 +75,8 @@
                         {
                             "key": "devices[].encryptionKey",
                             "type": "password"
-                        }
+                        },
+                        "devices[].invertFanDirection"
                     ]
                 }
             ]

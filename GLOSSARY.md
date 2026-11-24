@@ -9,7 +9,7 @@ A single ESPHome node reachable at a host and port, owning a set of components.
 _Avoid_: ESP, node, board
 
 **Component**:
-One addressable capability of a device: light, switch, binary sensor, sensor, or cover.
+One addressable capability of a device: light, switch, binary sensor, sensor, cover, or fan.
 _Avoid_: entity, channel
 
 **Accessory**:
@@ -31,6 +31,11 @@ _Avoid_: bonjour (that is the mechanism, not the concept), scanning
 **Blacklist**:
 Component names excluded from accessory creation by configuration.
 _Avoid_: ignore list
+
+**Fan preset mode**:
+A named fan program advertised by ESPHome (for example "sleep" or "auto"). HomeKit has no preset
+characteristic, so each preset is bridged as its own Switch service.
+_Avoid_: fan mode (ambiguous with HomeKit's TargetFanState), speed
 
 **Encryption key**:
 The base64-encoded 32-byte Noise PSK from ESPHome's `api: encryption: key:`, configured per device.

@@ -143,6 +143,27 @@ describe('bindComponent', () => {
         expect(context.services[1].name).toBe('different effect switch');
     });
 
+    it('find-or-add: reuses an existing service with the same subtype', () => {
+        const { component } = createFakeComponent();
+        const existing = new SwitchService('existing effect switch', 'rainbow Switch');
+        const { accessory, context } = createFakeAccessory(existing);
+        const addSpy = vi.spyOn(accessory, 'addService');
+
+        bindComponent(component, accessory, createFakeApi(), [
+            {
+                service: SwitchService,
+                name: 'renamed effect switch',
+                subtype: 'rainbow Switch',
+                characteristic: ON_CHARACTERISTIC,
+                project: () => false,
+            } as unknown as ComponentBinding,
+        ]);
+
+        expect(addSpy).not.toHaveBeenCalled();
+        expect(context.services).toHaveLength(1);
+        expect(context.services[0]).toBe(existing);
+    });
+
     it('pushes projected state on state$ emissions with updateValue', () => {
         const { component, state } = createFakeComponent();
         const { accessory, context } = createFakeAccessory();
@@ -311,6 +332,44 @@ describe('bindComponent', () => {
         expect(siblingApply).not.toHaveBeenCalled(); // updateValue skips the sibling's onSet
         expect(unrelated.value).toBeUndefined();
         expect(rainbow.value).toBeUndefined(); // the applying row itself is never touched
+    });
+
+    it('a radioGroup deselection does not push siblings off', async () => {
+        const { component } = createFakeComponent();
+        const { accessory, context } = createFakeAccessory();
+
+        bindComponent(
+            component,
+            accessory,
+            createFakeApi(),
+            fakeBindings([
+                {
+                    service: SwitchService,
+                    name: 'TestSwitch - rainbow',
+                    subtype: 'rainbow Switch',
+                    characteristic: ON_CHARACTERISTIC,
+                    apply: () => undefined,
+                    radioGroup: 'TestSwitch-effects',
+                },
+                {
+                    service: SwitchService,
+                    name: 'TestSwitch - strobe',
+                    subtype: 'strobe Switch',
+                    characteristic: ON_CHARACTERISTIC,
+                    apply: () => undefined,
+                    radioGroup: 'TestSwitch-effects',
+                },
+            ]),
+        );
+
+        const rainbow = assertCharacteristic(context.services[0], ON_CHARACTERISTIC);
+        const strobe = assertCharacteristic(context.services[1], ON_CHARACTERISTIC);
+
+        await invokeSet(rainbow, false);
+        await flush();
+
+        // Deselecting a row must not turn off the active sibling: the device was not touched.
+        expect(strobe.value).toBeUndefined();
     });
 
     it('a device push never re-enters the row apply, even when the value is out of sync', async () => {

@@ -242,6 +242,7 @@ interface PlatformSetupOptions {
         password?: string;
         port?: number;
         encryptionKey?: string;
+        invertFanDirection?: boolean;
         retryAfter?: number;
     }>;
     blacklist?: string[];
@@ -314,6 +315,7 @@ describe('EsphomePlatform', () => {
         expect(helper).toHaveBeenCalledWith(
             expect.objectContaining({ name: 'office-light' }),
             accessory,
+            expect.anything(),
             expect.anything(),
         );
     });
@@ -879,6 +881,26 @@ describe('EsphomePlatform', () => {
         expect(espDeviceAt(0).options).toEqual({ encryptionKey: VALID_KEY });
     });
 
+    it('warns and ignores a non-boolean invertFanDirection', () => {
+        const helper = vi.fn(() => () => {});
+        setupComponentHelper('fan', helper);
+        const { warn, didFinishLaunching } = createPlatform({
+            devices: [{ host: 'esp-one.local', invertFanDirection: 'true' as unknown as boolean }],
+        });
+        didFinishLaunching();
+        const device = espDeviceAt(0);
+        addComponent(device, 'office-fan', 'fan');
+        device.discovery$.next(true);
+
+        expect(warn).toHaveBeenCalledWith(expect.stringContaining('"invertFanDirection"'));
+        expect(helper).toHaveBeenCalledWith(
+            expect.objectContaining({ name: 'office-fan' }),
+            expect.anything(),
+            expect.anything(),
+            { invertFanDirection: false },
+        );
+    });
+
     it.each([
         [
             'InvalidEncryptionKeyError',
@@ -987,6 +1009,25 @@ describe('EsphomePlatform', () => {
         } finally {
             vi.useRealTimers();
         }
+    });
+
+    it('passes invertFanDirection to the component helper', () => {
+        const helper = vi.fn(() => () => {});
+        setupComponentHelper('fan', helper);
+        const { didFinishLaunching } = createPlatform({
+            devices: [{ host: 'esp-one.local', invertFanDirection: true }],
+        });
+        didFinishLaunching();
+        const device = espDeviceAt(0);
+        addComponent(device, 'office-fan', 'fan');
+        device.discovery$.next(true);
+
+        expect(helper).toHaveBeenCalledWith(
+            expect.objectContaining({ name: 'office-fan' }),
+            expect.anything(),
+            expect.anything(),
+            { invertFanDirection: true },
+        );
     });
 
     it('syncs the last known connection state into freshly added accessories', () => {

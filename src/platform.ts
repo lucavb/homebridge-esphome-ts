@@ -3,6 +3,7 @@ import type { Observable } from 'rxjs';
 import { concat, from, interval, EMPTY, Subscription } from 'rxjs';
 import { catchError, filter, map, mergeMap, shareReplay, take, takeUntil, tap, timeout } from 'rxjs';
 import { componentHelpers } from './homebridgeAccessories/componentHelpers.js';
+import type { ComponentHelperOptions } from './homebridgeAccessories/componentBinding.js';
 import { PLATFORM_NAME, PLUGIN_NAME } from './constants.js';
 import { applyConnectionStatus, watchDeviceConnection } from './shared/connectionStatus.js';
 import { describeDeviceError, isTerminalDeviceError } from './shared/deviceErrors.js';
@@ -17,6 +18,8 @@ interface IEsphomeDeviceConfig {
     password?: string;
     /** Base64-encoded 32-byte Noise PSK from ESPHome's `api: encryption: key:`. */
     encryptionKey?: string;
+    /** Swap HomeKit clockwise/counter-clockwise for fans whose forward/reverse wiring is inverted. */
+    invertFanDirection?: boolean;
     retryAfter?: number;
 }
 
@@ -159,6 +162,18 @@ export class EsphomePlatform implements DynamicPlatformPlugin {
                             );
                         }
                         const encryptionKey = trimmedKey === '' ? undefined : trimmedKey;
+                        const rawInvertFanDirection: unknown = deviceConfig.invertFanDirection;
+                        if (
+                            rawInvertFanDirection !== undefined &&
+                            rawInvertFanDirection !== null &&
+                            typeof rawInvertFanDirection !== 'boolean'
+                        ) {
+                            this.log.warn(
+                                `The "invertFanDirection" configured for ${deviceConfig.host} must be a boolean;` +
+                                    ' ignoring it.',
+                            );
+                        }
+                        const invertFanDirection = rawInvertFanDirection === true;
                         if (encryptionKey !== undefined && password !== undefined && password !== '') {
                             this.log.warn(
                                 `Both "password" and "encryptionKey" are configured for ${deviceConfig.host}.` +
@@ -281,7 +296,11 @@ export class EsphomePlatform implements DynamicPlatformPlugin {
                                 },
                             }),
                             takeUntil(terminalFailure$),
-                            tap(() => this.addAccessories(device, deviceConfig.host)),
+                            tap(() =>
+                                this.addAccessories(device, deviceConfig.host, {
+                                    invertFanDirection,
+                                }),
+                            ),
                             catchError((error: unknown) => {
                                 this.log.error(
                                     `Error while discovering or setting up accessories for device ${deviceConfig.host}.`,
@@ -314,7 +333,7 @@ export class EsphomePlatform implements DynamicPlatformPlugin {
         return configured;
     }
 
-    private addAccessories(device: EspDevice, host: string): void {
+    private addAccessories(device: EspDevice, host: string, options: ComponentHelperOptions = {}): void {
         for (const key of Object.keys(device.components)) {
             const component = device.components[key];
             if (this.blacklistSet.has(component.name)) {
@@ -336,7 +355,7 @@ export class EsphomePlatform implements DynamicPlatformPlugin {
                 accessory = new this.api.platformAccessory(component.name, uuid);
                 newAccessory = true;
             }
-            const teardown = componentHelper(component, accessory, this.api);
+            const teardown = componentHelper(component, accessory, this.api, options);
             if (!teardown) {
                 this.log(`${component.name} could not be mapped to HomeKit. Please file an issue on Github.`);
                 if (!newAccessory) {

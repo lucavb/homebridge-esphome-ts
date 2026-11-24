@@ -11,6 +11,8 @@ Supported components include:
 - BinarySensors (motion, window, door, smoke and leakage)
 - Sensors (temperature & humidity at the moment)
 - LightSensors (illuminance)
+- Covers
+- Fans (speed, direction, oscillation and preset modes)
 
 This project is currently still in beta, but I thought that many eyes see more than just
 my two :)
@@ -117,6 +119,28 @@ under `devices` with their `encryptionKey`; discovery will then reuse that entry
 `host` must be the mDNS hostname that discovery reports (for example `my_esp.local`), not an IP
 address: an IP-keyed entry is discovered as a second, keyless device and fails with an encryption
 error.
+
+### Fans
+
+Fans are exposed as HomeKit Fan v2 accessories: on/off, plus speed, direction and oscillation where
+the device advertises them. ESPHome preset modes appear as separate Switch services, because HomeKit
+has no preset-mode characteristic. Selecting a preset sets that preset on the device; it does not power
+the fan on by itself.
+
+ESPHome's forward/reverse direction is wiring-dependent. If clockwise and counter-clockwise are
+swapped for your fan, set `invertFanDirection`:
+
+```json
+{
+    "host": "my_fan.local",
+    "invertFanDirection": true
+}
+```
+
+If you change a fan's `preset_modes` in ESPHome, remove that fan's cached accessory (Homebridge UI →
+Settings → Remove Single Cached Accessory) or delete it from the accessory cache, then restart
+Homebridge. Editing the `devices` array alone does not prune the stale Switches; cached services are
+never removed automatically.
 
 ### Blacklisting
 

@@ -31,4 +31,9 @@ describe('config schema', () => {
     it('masks the encryptionKey in the config form', () => {
         expect(deviceFormItems).toContainEqual({ key: 'devices[].encryptionKey', type: 'password' });
     });
+
+    it('declares and renders invertFanDirection as a boolean', () => {
+        expect(deviceProperties.invertFanDirection).toMatchObject({ type: 'boolean' });
+        expect(deviceFormItems).toContain('devices[].invertFanDirection');
+    });
 });

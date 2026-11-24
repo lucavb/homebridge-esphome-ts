@@ -330,17 +330,34 @@ describe('lightHelper', () => {
             ]);
 
             await invokeSet(rainbowOn, true);
-            // The setter records the command; the device would confirm it via echo (see the
-            // state-echo test below for the reported-state readback path).
+            // The setter records the command; the radio group silences the sibling immediately,
+            // before any device echo can mask the push.
             expect(light.effectCommands).toEqual(['rainbow']);
             expect(strobeOn.value).toBe(false); // sibling silenced through updateValue
+            light.echo({ effect: 'rainbow' }); // the device confirms the selection
 
             await invokeSet(strobeOn, true);
             expect(light.effectCommands).toEqual(['rainbow', 'strobe']);
-            expect(rainbowOn.value).toBe(false);
+            expect(rainbowOn.value).toBe(false); // sibling silenced immediately
+            light.echo({ effect: 'strobe' });
 
-            await invokeSet(rainbowOn, false);
-            expect(light.effectCommands).toEqual(['rainbow', 'strobe', 'None']); // NO_EFFECT restores the base state
+            await invokeSet(strobeOn, false); // active effect: clears back to the base state
+            expect(light.effectCommands).toEqual(['rainbow', 'strobe', 'None']);
+
+            await invokeSet(rainbowOn, false); // inactive effect: no command
+            expect(light.effectCommands).toEqual(['rainbow', 'strobe', 'None']);
+        });
+
+        it('turning off an inactive effect does not clear the active effect', async () => {
+            const { light, rainbowOn, strobeOn } = setupEffects();
+            light.echo({ effect: 'rainbow' });
+            expect(rainbowOn.value).toBe(true);
+            expect(strobeOn.value).toBe(false);
+
+            await invokeSet(strobeOn, false);
+
+            expect(light.effectCommands).toHaveLength(0);
+            expect(rainbowOn.value).toBe(true);
         });
     });
 
