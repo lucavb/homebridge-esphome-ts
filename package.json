@@ -35,7 +35,7 @@
         "homebridge": "^1.6.0 || ^2.0.0"
     },
     "dependencies": {
-        "bonjour-hap": "^3.10.5",
+        "bonjour-hap": "^3.11.0",
         "esphome-ts": "^5.1.3",
         "rxjs": "^7.8.2"
     },
@@ -48,13 +48,13 @@
         "@semantic-release/github": "^12.0.10",
         "@semantic-release/npm": "^13.2.0",
         "@semantic-release/release-notes-generator": "^14.1.1",
-        "@types/node": "^26.2.0",
+        "@types/node": "^26.6.6",
         "conventional-changelog-conventionalcommits": "^9.3.1",
         "eslint": "^10.9.0",
         "eslint-config-prettier": "^10.1.8",
-        "homebridge": "^2.4.0",
+        "homebridge": "^2.5.0",
         "jiti": "^2.7.0",
-        "prettier": "^3.9.9",
+        "prettier": "^3.10.1",
         "rimraf": "^6.1.3",
         "semantic-release": "^25.0.9",
         "typescript": "^6.0.3",
