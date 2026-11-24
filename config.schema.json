@@ -24,6 +24,13 @@
                             "name": "Password",
                             "type": "string",
                             "required": false
+                        },
+                        "encryptionKey": {
+                            "title": "API encryption key",
+                            "description": "Base64 32-byte key from api: encryption: key: in ESPHome. Leave empty when the device is not encrypted. The all-zero key is ESPHome's provisioning sentinel and is rejected.",
+                            "type": "string",
+                            "required": false,
+                            "placeholder": "Base64 key from ESPHome"
                         }
                     }
                 }
@@ -55,7 +62,15 @@
             "items": [
                 {
                     "key": "devices",
-                    "items": ["devices[].host", "devices[].port", "devices[].password"]
+                    "items": [
+                        "devices[].host",
+                        "devices[].port",
+                        "devices[].password",
+                        {
+                            "key": "devices[].encryptionKey",
+                            "type": "password"
+                        }
+                    ]
                 }
             ]
         },

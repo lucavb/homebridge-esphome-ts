@@ -31,3 +31,7 @@ _Avoid_: bonjour (that is the mechanism, not the concept), scanning
 **Blacklist**:
 Component names excluded from accessory creation by configuration.
 _Avoid_: ignore list
+
+**Encryption key**:
+The base64-encoded 32-byte Noise PSK from ESPHome's `api: encryption: key:`, configured per device.
+_Avoid_: password (the legacy, separate mechanism), PSK alone

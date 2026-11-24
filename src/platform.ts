@@ -1,18 +1,22 @@
 import type { API, DynamicPlatformPlugin, Logging, PlatformAccessory, PlatformConfig } from 'homebridge';
 import type { Observable } from 'rxjs';
 import { concat, from, interval, EMPTY, Subscription } from 'rxjs';
-import { catchError, filter, map, mergeMap, take, takeUntil, tap, timeout } from 'rxjs';
+import { catchError, filter, map, mergeMap, shareReplay, take, takeUntil, tap, timeout } from 'rxjs';
 import { componentHelpers } from './homebridgeAccessories/componentHelpers.js';
 import { PLATFORM_NAME, PLUGIN_NAME } from './constants.js';
 import { applyConnectionStatus, watchDeviceConnection } from './shared/connectionStatus.js';
+import { describeDeviceError, isTerminalDeviceError } from './shared/deviceErrors.js';
+import type { DeviceErrorKind } from './shared/deviceErrors.js';
 import { writeReadDataToLogFile } from './shared/index.js';
-import { EspDevice, InvalidPasswordError } from 'esphome-ts';
+import { EspDevice } from 'esphome-ts';
 import { discoverDevices } from './discovery.js';
 
 interface IEsphomeDeviceConfig {
     host: string;
     port?: number;
     password?: string;
+    /** Base64-encoded 32-byte Noise PSK from ESPHome's `api: encryption: key:`. */
+    encryptionKey?: string;
     retryAfter?: number;
 }
 
@@ -27,6 +31,15 @@ interface IEsphomePlatformConfig extends PlatformConfig {
 
 const DEFAULT_RETRY_AFTER = 90_000;
 const DEFAULT_DISCOVERY_TIMEOUT = 5_000; // milliseconds
+/** Node clamps timer delays outside this range to 1 ms, which would become a reconnect hot loop. */
+const MIN_RETRY_AFTER = 1_000;
+const MAX_RETRY_AFTER = 2_147_483_647;
+
+/** A usable timer delay in [MIN_RETRY_AFTER, MAX_RETRY_AFTER], or the fallback when unset/not a number. */
+const retryDelay = (value: unknown, fallback: number): number =>
+    typeof value === 'number' && Number.isFinite(value)
+        ? Math.min(Math.max(Math.round(value), MIN_RETRY_AFTER), MAX_RETRY_AFTER)
+        : fallback;
 
 export class EsphomePlatform implements DynamicPlatformPlugin {
     protected readonly espDevices: EspDevice[] = [];
@@ -54,7 +67,13 @@ export class EsphomePlatform implements DynamicPlatformPlugin {
             );
             this.config.devices = [];
         }
-        this.blacklistSet = new Set<string>(this.config.blacklist ?? []);
+        const rawBlacklist: unknown = this.config.blacklist;
+        if (rawBlacklist !== undefined && !Array.isArray(rawBlacklist)) {
+            this.log.warn('The "blacklist" configuration must be an array; ignoring it.');
+        }
+        this.blacklistSet = new Set<string>(
+            Array.isArray(rawBlacklist) ? rawBlacklist.filter((name): name is string => typeof name === 'string') : [],
+        );
 
         this.api.on('didFinishLaunching', () => {
             this.onHomebridgeDidFinishLaunching();
@@ -66,13 +85,14 @@ export class EsphomePlatform implements DynamicPlatformPlugin {
     }
 
     protected onHomebridgeDidFinishLaunching(): void {
-        let devices: Observable<IEsphomeDeviceConfig> = from(this.config.devices ?? []);
+        const configuredDevices = this.usableConfiguredDevices();
+        let devices: Observable<IEsphomeDeviceConfig> = from(configuredDevices);
         if (this.config.discover) {
             const excludeConfigDevices: Set<string> = new Set();
             devices = concat(
                 discoverDevices(this.config.discoveryTimeout ?? DEFAULT_DISCOVERY_TIMEOUT, this.log).pipe(
                     map((discoveredDevice) => {
-                        const configDevice = this.config.devices?.find(({ host }) => host === discoveredDevice.host);
+                        const configDevice = configuredDevices.find(({ host }) => host === discoveredDevice.host);
                         let deviceConfig = discoveredDevice;
                         if (configDevice) {
                             excludeConfigDevices.add(configDevice.host);
@@ -88,7 +108,7 @@ export class EsphomePlatform implements DynamicPlatformPlugin {
                     }),
                 ),
                 // Feed into output remaining devices from config that haven't been discovered
-                devices.pipe(filter(({ host }) => !excludeConfigDevices.has(host))),
+                from(configuredDevices).pipe(filter(({ host }) => !excludeConfigDevices.has(host))),
             );
         }
 
@@ -96,38 +116,148 @@ export class EsphomePlatform implements DynamicPlatformPlugin {
             devices
                 .pipe(
                     mergeMap((deviceConfig) => {
-                        const device = new EspDevice(deviceConfig.host, deviceConfig.password, deviceConfig.port);
+                        const rawHost: unknown = deviceConfig.host;
+                        if (typeof rawHost !== 'string' || rawHost.trim() === '') {
+                            this.log.error('A "devices" entry is missing a valid "host"; skipping it.');
+                            return EMPTY;
+                        }
+                        const rawPassword: unknown = deviceConfig.password;
+                        if (rawPassword !== undefined && rawPassword !== null && typeof rawPassword !== 'string') {
+                            this.log.error(`The "password" configured for ${deviceConfig.host} must be a string.`);
+                            return EMPTY;
+                        }
+                        const password = typeof rawPassword === 'string' ? rawPassword : undefined;
+                        const rawPort: unknown = deviceConfig.port;
+                        const port =
+                            rawPort === undefined || rawPort === null
+                                ? undefined
+                                : typeof rawPort === 'number' || typeof rawPort === 'string'
+                                  ? Number(rawPort)
+                                  : Number.NaN;
+                        if (port !== undefined && (!Number.isInteger(port) || port < 1 || port > 65_535)) {
+                            this.log.error(
+                                `The "port" configured for ${deviceConfig.host} must be an integer between 1 and 65535.`,
+                            );
+                            return EMPTY;
+                        }
+                        const rawEncryptionKey: unknown = deviceConfig.encryptionKey;
+                        if (
+                            rawEncryptionKey !== undefined &&
+                            rawEncryptionKey !== null &&
+                            typeof rawEncryptionKey !== 'string'
+                        ) {
+                            this.log.error(`The "encryptionKey" configured for ${deviceConfig.host} must be a string.`);
+                            return EMPTY;
+                        }
+                        const trimmedKey = typeof rawEncryptionKey === 'string' ? rawEncryptionKey.trim() : '';
+                        if (typeof rawEncryptionKey === 'string' && rawEncryptionKey !== '' && trimmedKey === '') {
+                            // A field left as spaces is a mistake; a plain empty string is the
+                            // normal "unencrypted" state and stays silent.
+                            this.log.warn(
+                                `The "encryptionKey" configured for ${deviceConfig.host} is blank;` +
+                                    ' treating the device as unencrypted.',
+                            );
+                        }
+                        const encryptionKey = trimmedKey === '' ? undefined : trimmedKey;
+                        if (encryptionKey !== undefined && password !== undefined && password !== '') {
+                            this.log.warn(
+                                `Both "password" and "encryptionKey" are configured for ${deviceConfig.host}.` +
+                                    ' ESPHome uses one or the other.',
+                            );
+                        }
+
+                        const rawRetryAfter = deviceConfig.retryAfter;
+                        const globalRetryAfter = retryDelay(this.config.retryAfter, DEFAULT_RETRY_AFTER);
+                        const retryAfter = retryDelay(rawRetryAfter, globalRetryAfter);
+                        const roundedRetryAfter =
+                            typeof rawRetryAfter === 'number' ? Math.round(rawRetryAfter) : Number.NaN;
+                        if (rawRetryAfter !== undefined && retryAfter !== roundedRetryAfter) {
+                            this.log.warn(
+                                `The "retryAfter" configured for ${deviceConfig.host} is invalid;` +
+                                    ` using ${retryAfter} ms.`,
+                            );
+                        }
+
+                        let device: EspDevice;
+                        try {
+                            device = new EspDevice(
+                                deviceConfig.host,
+                                password,
+                                port,
+                                encryptionKey === undefined ? undefined : { encryptionKey },
+                            );
+                        } catch (error) {
+                            const description = describeDeviceError(deviceConfig.host, error, {
+                                encryptionKeyConfigured: encryptionKey !== undefined,
+                            });
+                            this.log.error(
+                                description.message ?? `Could not create the esphome device ${deviceConfig.host}.`,
+                                error,
+                            );
+                            return EMPTY;
+                        }
+
                         // Track openings for terminate() on shutdown; devices were previously created
                         // but never pushed, making the shutdown loop a no-op.
                         this.espDevices.push(device);
                         if (this.config.debug) {
-                            this.log('Writing the raw data from your ESP Device to /tmp');
-                            writeReadDataToLogFile(deviceConfig.host, device);
+                            const dumpSubscription = writeReadDataToLogFile(deviceConfig.host, device, (error) => {
+                                this.log.warn(
+                                    `Writing the raw data for ${deviceConfig.host} to /tmp failed;` +
+                                        ' no further debug dumps are written for this device.',
+                                );
+                                this.log.debug('debug dump write failed', error);
+                            });
+                            if (dumpSubscription) {
+                                this.log('Writing the raw data from your ESP Device to /tmp');
+                                this.subscription.add(dumpSubscription);
+                            } else {
+                                this.log.debug(
+                                    `No socket to mirror for ${deviceConfig.host}; debug dumps are unavailable.`,
+                                );
+                            }
                         }
-                        // esphome-ts 5 latches a rejected password as terminal (the password is
-                        // fixed at construction), so ticks after an InvalidPasswordError can
-                        // never reconnect — stop the cadence then instead of logging futile attempts.
-                        const passwordRejected$ = device.error$.pipe(
-                            filter((error): error is InvalidPasswordError => error instanceof InvalidPasswordError),
+
+                        // esphome-ts latches rejected credentials and encryption mismatches as
+                        // terminal (the config cannot change while connected), so stop the retry
+                        // cadence and the discovery wait instead of logging futile attempts.
+                        // The notifier must replay: esphome-ts tears the provided cadence down
+                        // when the device connects and subscribes a fresh copy after the terminal
+                        // failure disconnects it. A cold take(1) would have missed the error.
+                        const terminalFailure$ = device.error$.pipe(
+                            filter(isTerminalDeviceError),
                             take(1),
+                            shareReplay({ bufferSize: 1, refCount: false }),
                         );
-                        device.provideRetryObservable(
-                            interval(deviceConfig.retryAfter ?? this.config.retryAfter ?? DEFAULT_RETRY_AFTER).pipe(
-                                takeUntil(passwordRejected$),
-                                tap(() => this.log.info(`Trying to reconnect now to device ${deviceConfig.host}`)),
-                            ),
-                        );
+                        const warnedKinds = new Set<DeviceErrorKind>();
                         this.subscription.add(
                             device.error$.subscribe((error) => {
-                                if (error instanceof InvalidPasswordError) {
+                                const description = describeDeviceError(deviceConfig.host, error, {
+                                    encryptionKeyConfigured: encryptionKey !== undefined,
+                                });
+                                if (description.terminal) {
                                     this.log.error(
-                                        `The esphome device ${deviceConfig.host} rejected your password.` +
-                                            ' Please check the "password" configured for this device.',
+                                        description.message ?? `Error from esphome device ${deviceConfig.host}`,
                                     );
-                                } else {
-                                    this.log.debug(`Error from esphome device ${deviceConfig.host}`, error);
+                                    return;
                                 }
+                                if (
+                                    description.warnOnce &&
+                                    description.message !== undefined &&
+                                    !warnedKinds.has(description.kind)
+                                ) {
+                                    warnedKinds.add(description.kind);
+                                    this.log.warn(description.message);
+                                    return;
+                                }
+                                this.log.debug(`Error from esphome device ${deviceConfig.host}`, error);
                             }),
+                        );
+                        device.provideRetryObservable(
+                            interval(retryAfter).pipe(
+                                takeUntil(terminalFailure$),
+                                tap(() => this.log.info(`Trying to reconnect now to device ${deviceConfig.host}`)),
+                            ),
                         );
                         this.subscription.add(
                             watchDeviceConnection(deviceConfig.host, device, this.log, this.api, {
@@ -150,6 +280,7 @@ export class EsphomePlatform implements DynamicPlatformPlugin {
                                     );
                                 },
                             }),
+                            takeUntil(terminalFailure$),
                             tap(() => this.addAccessories(device, deviceConfig.host)),
                             catchError((error: unknown) => {
                                 this.log.error(
@@ -163,6 +294,24 @@ export class EsphomePlatform implements DynamicPlatformPlugin {
                 )
                 .subscribe(),
         );
+    }
+
+    /** Drops entries that are not objects; the per-field validation runs on every survivor. */
+    private usableConfiguredDevices(): IEsphomeDeviceConfig[] {
+        const rawDevices: unknown = this.config.devices;
+        if (rawDevices !== undefined && !Array.isArray(rawDevices)) {
+            this.log.error('The "devices" configuration must be an array; ignoring it.');
+        }
+        const entries: unknown[] = Array.isArray(rawDevices) ? rawDevices : [];
+        const configured: IEsphomeDeviceConfig[] = [];
+        for (const [index, entry] of entries.entries()) {
+            if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) {
+                this.log.error(`Skipping devices[${index}]: it is not an object.`);
+                continue;
+            }
+            configured.push(entry as IEsphomeDeviceConfig);
+        }
+        return configured;
     }
 
     private addAccessories(device: EspDevice, host: string): void {
