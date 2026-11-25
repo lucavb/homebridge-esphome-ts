@@ -92,6 +92,7 @@ describe('bindComponent', () => {
                 service: SwitchService,
                 name: 'TestSwitch',
                 characteristic: ON_CHARACTERISTIC,
+                read: null,
                 project: () => false,
             } as unknown as ComponentBinding,
         ]);
@@ -114,6 +115,7 @@ describe('bindComponent', () => {
                 service: SwitchService,
                 name: 'TestSwitch',
                 characteristic: ON_CHARACTERISTIC,
+                read: null,
                 project: () => false,
             } as unknown as ComponentBinding,
         ]);
@@ -133,6 +135,7 @@ describe('bindComponent', () => {
                 name: 'different effect switch',
                 subtype: 'strobe Switch',
                 characteristic: ON_CHARACTERISTIC,
+                read: null,
                 project: () => false,
             } as unknown as ComponentBinding,
         ]);
@@ -155,6 +158,7 @@ describe('bindComponent', () => {
                 name: 'renamed effect switch',
                 subtype: 'rainbow Switch',
                 characteristic: ON_CHARACTERISTIC,
+                read: null,
                 project: () => false,
             } as unknown as ComponentBinding,
         ]);
@@ -173,6 +177,7 @@ describe('bindComponent', () => {
                 service: SensorService,
                 name: 'TestSensor',
                 characteristic: CURRENT_VALUE_CHARACTERISTIC,
+                read: null,
                 project: (state: unknown) => (typeof state === 'number' ? state : undefined),
             } as unknown as ComponentBinding,
         ]);
@@ -192,6 +197,7 @@ describe('bindComponent', () => {
                 service: SensorService,
                 name: 'TestSensor',
                 characteristic: CURRENT_VALUE_CHARACTERISTIC,
+                read: null,
                 project: (state: unknown) => (typeof state === 'number' ? state : undefined),
             } as unknown as ComponentBinding,
         ]);
@@ -199,6 +205,34 @@ describe('bindComponent', () => {
         const characteristic = assertCharacteristic(context.services[0], CURRENT_VALUE_CHARACTERISTIC);
         state.next('not a measurement');
         expect(characteristic.value).toBeUndefined();
+    });
+
+    it('skips a throwing projection without killing the row push', () => {
+        const { component, state } = createFakeComponent();
+        const { accessory, context } = createFakeAccessory();
+
+        bindComponent(component, accessory, createFakeApi(), [
+            {
+                service: SensorService,
+                name: 'TestSensor',
+                characteristic: CURRENT_VALUE_CHARACTERISTIC,
+                read: null,
+                project: (value: unknown) => {
+                    if (value === 'boom') {
+                        throw new Error('projection failed');
+                    }
+                    return typeof value === 'number' ? value : undefined;
+                },
+            } as unknown as ComponentBinding,
+        ]);
+
+        const characteristic = assertCharacteristic(context.services[0], CURRENT_VALUE_CHARACTERISTIC);
+        state.next('boom');
+        expect(characteristic.value).toBeUndefined();
+
+        // The subscription survives the bad emission: the next good one still lands.
+        state.next(7);
+        expect(characteristic.value).toBe(7);
     });
 
     it('unsubscribes all row pushes on teardown', () => {
@@ -210,6 +244,7 @@ describe('bindComponent', () => {
                 service: SensorService,
                 name: 'TestSensor',
                 characteristic: CURRENT_VALUE_CHARACTERISTIC,
+                read: null,
                 project: (state: unknown) => (typeof state === 'number' ? state : undefined),
             } as unknown as ComponentBinding,
         ]);
@@ -233,6 +268,7 @@ describe('bindComponent', () => {
                 service: SwitchService,
                 name: 'TestSwitch',
                 characteristic: ON_CHARACTERISTIC,
+                read: null,
                 apply,
             } as unknown as ComponentBinding,
         ]);
@@ -284,6 +320,27 @@ describe('bindComponent', () => {
         });
     });
 
+    it('a read: null row wires no onGet and still pushes what project returns', () => {
+        const { component, state } = createFakeComponent();
+        const { accessory, context } = createFakeAccessory();
+
+        bindComponent(component, accessory, createFakeApi(), [
+            {
+                service: SwitchService,
+                name: 'TestSwitch',
+                characteristic: ON_CHARACTERISTIC,
+                read: null,
+                project: (state: unknown) => (typeof state === 'boolean' ? state : undefined),
+            } as unknown as ComponentBinding,
+        ]);
+
+        const characteristic = assertCharacteristic(context.services[0], ON_CHARACTERISTIC);
+        expect(characteristic.getHandler).toBeUndefined();
+
+        state.next(true);
+        expect(characteristic.value).toBe(true);
+    });
+
     it('a radioGroup apply pushes updateValue(false) to sibling rows, not to the applying row', async () => {
         const { component } = createFakeComponent();
         const { accessory, context } = createFakeAccessory();
@@ -299,6 +356,7 @@ describe('bindComponent', () => {
                     name: 'TestSwitch - rainbow',
                     subtype: 'rainbow Switch',
                     characteristic: ON_CHARACTERISTIC,
+                    read: null,
                     apply: () => undefined,
                     radioGroup: 'TestSwitch-effects',
                 },
@@ -307,6 +365,7 @@ describe('bindComponent', () => {
                     name: 'TestSwitch - strobe',
                     subtype: 'strobe Switch',
                     characteristic: ON_CHARACTERISTIC,
+                    read: null,
                     apply: siblingApply,
                     radioGroup: 'TestSwitch-effects',
                 },
@@ -315,6 +374,7 @@ describe('bindComponent', () => {
                     name: 'TestSwitch - unrelated',
                     subtype: 'unrelated Switch',
                     characteristic: ON_CHARACTERISTIC,
+                    read: null,
                     apply: vi.fn(),
                 },
             ]),
@@ -348,6 +408,7 @@ describe('bindComponent', () => {
                     name: 'TestSwitch - rainbow',
                     subtype: 'rainbow Switch',
                     characteristic: ON_CHARACTERISTIC,
+                    read: null,
                     apply: () => undefined,
                     radioGroup: 'TestSwitch-effects',
                 },
@@ -356,6 +417,7 @@ describe('bindComponent', () => {
                     name: 'TestSwitch - strobe',
                     subtype: 'strobe Switch',
                     characteristic: ON_CHARACTERISTIC,
+                    read: null,
                     apply: () => undefined,
                     radioGroup: 'TestSwitch-effects',
                 },
@@ -389,6 +451,7 @@ describe('bindComponent', () => {
                 service: SwitchService,
                 name: 'TestSwitch',
                 characteristic: ON_CHARACTERISTIC,
+                read: () => raw.status,
                 apply: (value: CharacteristicValue) => {
                     if (raw.status !== !!value) {
                         if (value) {
@@ -433,6 +496,7 @@ describe('bindComponent', () => {
                     service: SensorService,
                     name: 'TestSensor',
                     characteristic: CURRENT_VALUE_CHARACTERISTIC,
+                    read: null,
                     apply,
                     project: (state: unknown) => (typeof state === 'number' ? state : undefined),
                 },
@@ -468,6 +532,7 @@ describe('bindComponent', () => {
                     service: LightbulbService,
                     name: 'TestLight',
                     characteristic: ON_CHARACTERISTIC,
+                    read: null,
                     apply: (value: CharacteristicValue) => {
                         if (value) {
                             raw.turnOn();
@@ -482,6 +547,7 @@ describe('bindComponent', () => {
                     name: 'TestLight - rainbow',
                     subtype: 'rainbow Switch',
                     characteristic: ON_CHARACTERISTIC,
+                    read: () => raw.effect === 'rainbow',
                     apply: (value: CharacteristicValue) => {
                         raw.effect = value ? 'rainbow' : 'None';
                     },
@@ -493,6 +559,7 @@ describe('bindComponent', () => {
                     name: 'TestLight - strobe',
                     subtype: 'strobe Switch',
                     characteristic: ON_CHARACTERISTIC,
+                    read: () => raw.effect === 'strobe',
                     apply: (value: CharacteristicValue) => {
                         raw.effect = value ? 'strobe' : 'None';
                     },

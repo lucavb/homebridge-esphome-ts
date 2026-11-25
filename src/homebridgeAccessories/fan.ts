@@ -75,23 +75,25 @@ export const fanHelper = (
         return component.status ? Math.max(1, percentage) : percentage;
     };
 
+    const active = (): CharacteristicValue => (component.status ? ACTIVE : INACTIVE);
+
     const bindings: ComponentBinding[] = [
         {
             service: Service.Fanv2,
             name: component.name,
             characteristic: CharacteristicClass.Active,
-            read: () => (component.status ? ACTIVE : INACTIVE),
+            read: active,
             apply: (value) => {
-                const active = value === ACTIVE;
-                if (active !== component.status) {
-                    if (active) {
+                const isActive = value === ACTIVE;
+                if (isActive !== component.status) {
+                    if (isActive) {
                         component.turnOn();
                     } else {
                         component.turnOff();
                     }
                 }
             },
-            project: () => (component.status ? ACTIVE : INACTIVE),
+            project: active,
         },
     ];
 
@@ -159,22 +161,26 @@ export const fanHelper = (
 
     const presets = [...new Set(component.supportedPresetModes)].filter((preset) => preset !== '');
     bindings.push(
-        ...presets.map((preset): ComponentBinding => ({
-            service: Service.Switch,
-            name: `${component.name} - ${preset}`,
-            subtype: `${preset} Fan Preset`,
-            characteristic: CharacteristicClass.On,
-            apply: (value) => {
-                if (value) {
-                    component.setPresetMode(preset);
-                } else if (component.presetMode === preset) {
-                    // Clearing an inactive preset would wipe whichever preset is active.
-                    component.setPresetMode(NO_PRESET);
-                }
-            },
-            project: () => component.presetMode === preset,
-            radioGroup: `${component.name}-presets`,
-        })),
+        ...presets.map((preset): ComponentBinding => {
+            const selected = (): boolean => component.presetMode === preset;
+            return {
+                service: Service.Switch,
+                name: `${component.name} - ${preset}`,
+                subtype: `${preset} Fan Preset`,
+                characteristic: CharacteristicClass.On,
+                read: selected,
+                apply: (value) => {
+                    if (value) {
+                        component.setPresetMode(preset);
+                    } else if (component.presetMode === preset) {
+                        // Clearing an inactive preset would wipe whichever preset is active.
+                        component.setPresetMode(NO_PRESET);
+                    }
+                },
+                project: selected,
+                radioGroup: `${component.name}-presets`,
+            };
+        }),
     );
 
     return bindComponent(component, accessory, api, bindings);

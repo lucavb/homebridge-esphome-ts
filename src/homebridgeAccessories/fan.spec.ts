@@ -412,6 +412,9 @@ describe('fanHelper', () => {
         state.next({ key: 42, presetMode: 'auto' });
         expect(auto.value).toBe(true);
         expect(sleep.value).toBe(false);
+        // Preset rows serve the live selected state, like the light effect rows.
+        expect(await invokeGet(auto)).toBe(true);
+        expect(await invokeGet(sleep)).toBe(false);
 
         const setPreset = vi.spyOn(component, 'setPresetMode');
         await invokeSet(sleep, false); // inactive preset: must not clear the active one

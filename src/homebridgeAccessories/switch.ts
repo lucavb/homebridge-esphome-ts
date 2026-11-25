@@ -14,12 +14,13 @@ export const switchHelper = (
         return undefined;
     }
 
+    const status = () => component.status;
     const bindings: ComponentBinding[] = [
         {
             service: api.hap.Service.Switch,
             name: component.name,
             characteristic: api.hap.Characteristic.On,
-            read: () => component.status,
+            read: status,
             apply: (value) => {
                 if (component.status !== !!value) {
                     if (value) {
@@ -29,7 +30,7 @@ export const switchHelper = (
                     }
                 }
             },
-            project: () => component.status,
+            project: status,
         },
     ];
 

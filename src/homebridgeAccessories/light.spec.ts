@@ -61,6 +61,13 @@ const invokeSet = async (characteristic: FakeHapCharacteristic, value: Character
     return await handler(value);
 };
 
+/** Invokes the stored onGet handler, failing loudly when none is registered. */
+const invokeGet = async (characteristic: FakeHapCharacteristic): Promise<unknown> => {
+    const handler = characteristic.getHandler;
+    ok(handler, 'expected an onGet handler to be registered');
+    return await handler();
+};
+
 /** Lets a would-be (wrong) setValue re-entry settle before asserting side effects. */
 const flush = async (): Promise<void> => {
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -91,6 +98,11 @@ const createFakeLightComponent = (options: FakeLightOptions = {}) => {
      */
     const state = new BehaviorSubject<unknown>(undefined);
     const state$ = state.pipe(filter((value) => value !== undefined));
+    /** The device's latest state event, mirroring the normalized state the real getters read. */
+    let lastState: FakeLightEcho = {};
+    state$.subscribe((value) => {
+        lastState = value as FakeLightEcho;
+    });
 
     const turnOn = vi.fn();
     const turnOff = vi.fn();
@@ -139,6 +151,15 @@ const createFakeLightComponent = (options: FakeLightOptions = {}) => {
     Object.defineProperty(component, 'turnOn', { enumerable: true, value: turnOn });
     Object.defineProperty(component, 'turnOff', { enumerable: true, value: turnOff });
     Object.defineProperty(component, 'setBrightness', { enumerable: true, value: setBrightness });
+    Object.defineProperty(component, 'getBrightness', {
+        enumerable: true,
+        value: (): number | undefined => {
+            if (lastState.brightness === undefined) {
+                return undefined;
+            }
+            return options.supportsRgb ? hsvState.value : Math.floor(lastState.brightness * 100);
+        },
+    });
 
     /**
      * Device echo: updates the reported fields AND pushes the same payload on state$, like the
@@ -286,8 +307,41 @@ describe('lightHelper', () => {
         light.state.next({ state: true, brightness: 0.3 });
         expect(characteristics.brightness.value).toBe(30);
 
+        // The push floors like the getter: 0.335 is 33, not the 33.5 the raw event carries.
+        light.state.next({ state: true, brightness: 0.335 });
+        expect(characteristics.brightness.value).toBe(33);
+
         light.state.next({ state: true, brightness: undefined });
         expect(characteristics.brightness.value).toBe(0);
+    });
+
+    it('serves live GETs for the rows the Component exposes', async () => {
+        const light = createFakeLightComponent({
+            supportsRgb: true,
+            effects: ['None', 'rainbow', 'strobe'],
+        });
+        const { accessory, context } = createFakeAccessory();
+        lightHelper(light.component, accessory, createFakeApi());
+        light.echo({ state: true, hue: 10, saturation: 20, value: 30, effect: 'rainbow' });
+
+        const characteristics = bulbCharacteristicsOf(accessory);
+        // LightComponent exposes no on/off accessor; the state event is the only truth.
+        expect(characteristics.on.getHandler).toBeUndefined();
+        expect(await invokeGet(characteristics.hue)).toBe(10);
+        expect(await invokeGet(characteristics.saturation)).toBe(20);
+        expect(await invokeGet(characteristics.brightness)).toBe(30);
+        expect(await invokeGet(assertCharacteristic(context.services[1], ON_CHARACTERISTIC))).toBe(true);
+        expect(await invokeGet(assertCharacteristic(context.services[2], ON_CHARACTERISTIC))).toBe(false);
+    });
+
+    it('serves the normalized 0..100 getter for a non-RGB Brightness', async () => {
+        const light = createFakeLightComponent({ supportsBrightness: true });
+        const { accessory } = createFakeAccessory();
+        lightHelper(light.component, accessory, createFakeApi());
+        const characteristics = bulbCharacteristicsOf(accessory);
+
+        light.echo({ state: true, brightness: 0.335 });
+        expect(await invokeGet(characteristics.brightness)).toBe(33);
     });
 
     describe('effects', () => {
@@ -295,7 +349,9 @@ describe('lightHelper', () => {
             const light = createFakeLightComponent({
                 supportsRgb: false,
                 supportsBrightness: false,
-                effects: ['None', 'rainbow', 'strobe'],
+                // A duplicate advertised effect must not produce a second row: it would share
+                // the characteristic and the radio group would push it off itself.
+                effects: ['None', 'rainbow', 'rainbow', 'strobe'],
             });
             const accessory = createFakeAccessory();
             lightHelper(light.component, accessory.accessory, createFakeApi());
@@ -334,6 +390,7 @@ describe('lightHelper', () => {
             // before any device echo can mask the push.
             expect(light.effectCommands).toEqual(['rainbow']);
             expect(strobeOn.value).toBe(false); // sibling silenced through updateValue
+            expect(rainbowOn.value).toBeUndefined(); // a duplicate row would silence itself
             light.echo({ effect: 'rainbow' }); // the device confirms the selection
 
             await invokeSet(strobeOn, true);

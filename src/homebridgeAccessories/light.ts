@@ -23,6 +23,8 @@ export const lightHelper = (
             service: Service.Lightbulb,
             name: component.name,
             characteristic: CharacteristicClass.On,
+            // esphome-ts exposes no on/off accessor on LightComponent; the state event is the only truth.
+            read: null,
             apply: (on) => {
                 if (on) {
                     component.turnOn();
@@ -37,73 +39,86 @@ export const lightHelper = (
     if (component.supportsRgb) {
         let lastHue: number | undefined;
         let lastSat: number | undefined;
+        const hue = (): number => component.hsv.hue;
+        const saturation = (): number => component.hsv.saturation;
+        const brightness = (): number => component.hsv.value;
         bindings.push(
             {
                 service: Service.Lightbulb,
                 name: component.name,
                 characteristic: CharacteristicClass.Hue,
-                apply: (hue) => {
-                    if (typeof hue === 'number') {
-                        lastHue = hue;
+                read: hue,
+                apply: (hueValue) => {
+                    if (typeof hueValue === 'number') {
+                        lastHue = hueValue;
                         const hsv = component.hsv;
                         hsv.hue = lastHue ?? 0;
                         hsv.saturation = lastSat ?? 0;
                         component.hsv = hsv;
                     }
                 },
-                project: () => component.hsv.hue,
+                project: hue,
             },
             {
                 service: Service.Lightbulb,
                 name: component.name,
                 characteristic: CharacteristicClass.Saturation,
-                apply: (saturation) => {
-                    if (typeof saturation === 'number') {
-                        lastSat = saturation;
+                read: saturation,
+                apply: (saturationValue) => {
+                    if (typeof saturationValue === 'number') {
+                        lastSat = saturationValue;
                         const hsv = component.hsv;
-                        hsv.saturation = saturation;
+                        hsv.saturation = saturationValue;
                         component.hsv = hsv;
                     }
                 },
-                project: () => component.hsv.saturation,
+                project: saturation,
             },
             {
                 service: Service.Lightbulb,
                 name: component.name,
                 characteristic: CharacteristicClass.Brightness,
-                apply: (brightness) => {
-                    if (typeof brightness === 'number') {
+                read: brightness,
+                apply: (brightnessValue) => {
+                    if (typeof brightnessValue === 'number') {
                         const hsv = component.hsv;
-                        hsv.value = brightness;
+                        hsv.value = brightnessValue;
                         component.hsv = hsv;
                     }
                 },
-                project: () => component.hsv.value,
+                project: brightness,
             },
         );
     } else if (component.supportsBrightness) {
+        // getBrightness() is the published 0..100 value (floor of the device's 0..1 level).
+        // Before the first state it is undefined; serve 0 (hap's own Brightness default) rather
+        // than erroring — the benign-rest-value exemption in CODING_STANDARDS. RGB cannot do
+        // better: esphome-ts's `hsv` collapses unknown to {0, 0, 0} anyway.
+        const brightness = (): number => component.getBrightness() ?? 0;
         bindings.push({
             service: Service.Lightbulb,
             name: component.name,
             characteristic: CharacteristicClass.Brightness,
-            apply: (brightness) => {
-                if (typeof brightness === 'number') {
-                    component.setBrightness(brightness);
+            read: brightness,
+            apply: (brightnessValue) => {
+                if (typeof brightnessValue === 'number') {
+                    component.setBrightness(brightnessValue);
                 }
             },
-            project: (state: LightStateEvent) => (state.brightness ?? 0) * 100,
+            project: brightness,
         });
     }
 
-    const effects = component
-        .availableEffects()
+    const effects = [...new Set(component.availableEffects())]
         .filter((effect: string) => effect !== NO_EFFECT)
         .map((effect: string): ComponentBinding => {
+            const selected = (): boolean => component.effect === effect;
             return {
                 service: Service.Switch,
                 name: `${component.name} - ${effect}`,
                 subtype: `${effect} Switch`,
                 characteristic: CharacteristicClass.On,
+                read: selected,
                 apply: (on) => {
                     if (on) {
                         component.effect = effect;
@@ -112,7 +127,7 @@ export const lightHelper = (
                         component.effect = NO_EFFECT;
                     }
                 },
-                project: (state: LightStateEvent) => state.effect === effect,
+                project: selected,
                 radioGroup: `${component.name}-effects`,
             };
         });

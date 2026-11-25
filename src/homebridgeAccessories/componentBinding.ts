@@ -14,8 +14,11 @@ export interface ComponentHelperOptions {
  * The mapping that attaches one component onto an accessory: which service, which
  * characteristics, how state is read, applied, and pushed (GLOSSARY: component binding).
  *
- * Rows close over their typed component. A row without {@link ComponentBinding.read} wires
- * no `onGet`, one without {@link ComponentBinding.apply} wires no `onSet`, and a
+ * Rows close over their typed component. A row with `read: null` wires no `onGet`; `null` is
+ * the explicit "the Component exposes no live accessor for this row" policy, so a forgotten
+ * getter cannot hide as an omission.
+ *
+ * A row without {@link ComponentBinding.apply} wires no `onSet`, and a
  * {@link ComponentBinding.project} that returns `undefined` skips the push.
  */
 export interface ComponentBinding {
@@ -26,8 +29,12 @@ export interface ComponentBinding {
     /** Optional service subtype (light effect switches, fan presets). */
     readonly subtype?: string;
     readonly characteristic: WithUUID<new (...args: never[]) => Characteristic>;
-    /** Wired as `onGet`; omit to leave the characteristic without a getter. */
-    readonly read?: () => CharacteristicValue;
+    /**
+     * Wired as `onGet`; `null` declares that the Component exposes no live accessor for this
+     * row (light On), so the pushed value is the only truth. Required on purpose: every row
+     * must decide.
+     */
+    readonly read: (() => CharacteristicValue) | null;
     /** Wired as `onSet`; omit to leave the characteristic without a setter. */
     readonly apply?: (value: CharacteristicValue) => void;
     /**
@@ -112,7 +119,7 @@ export const bindComponent = (
             });
         }
 
-        if (read) {
+        if (read !== null) {
             characteristic.onGet(async () => {
                 try {
                     return read();
@@ -129,7 +136,16 @@ export const bindComponent = (
                         if (!row.project) {
                             return;
                         }
-                        const value = row.project(state);
+                        // A throwing projection is a plugin bug, not a device error. Skip that
+                        // emission instead of erroring the row's stream: an unhandled error here
+                        // rethrows asynchronously, which restarts the whole bridge, and the
+                        // subscription would not come back because `components$` emits once.
+                        let value: CharacteristicValue | undefined;
+                        try {
+                            value = row.project(state);
+                        } catch {
+                            return;
+                        }
                         if (value === undefined) {
                             return;
                         }

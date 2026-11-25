@@ -83,22 +83,31 @@ const setupRow = (
 ): (() => void) => {
     const valuesAreFahrenheit = component.unitOfMeasurement === fahrenheitUnit;
 
+    const reportedValue = (): number | undefined => {
+        const convertedValue =
+            valuesAreFahrenheit && component.value !== undefined
+                ? fahrenheitToCelsius(component.value)
+                : component.value;
+        if (convertedValue === undefined) {
+            // No measurement yet; the GET fails and the push skips.
+            return undefined;
+        }
+        return clamp === undefined ? convertedValue : clampTo(convertedValue, clamp);
+    };
+
     return bindComponent(component, accessory, api, [
         {
             service: SelectedService,
             name: component.name,
             characteristic: SelectedCharacteristic,
-            project: () => {
-                const convertedValue =
-                    valuesAreFahrenheit && component.value !== undefined
-                        ? fahrenheitToCelsius(component.value)
-                        : component.value;
-                if (convertedValue === undefined) {
-                    // No measurement yet; silently skip so a throw cannot kill the state$ subscription.
-                    return undefined;
+            read: () => {
+                const value = reportedValue();
+                if (value === undefined) {
+                    throw new Error('sensor value not reported yet');
                 }
-                return clamp === undefined ? convertedValue : clampTo(convertedValue, clamp);
+                return value;
             },
+            project: reportedValue,
         },
     ]);
 };

@@ -2,13 +2,16 @@ import { describe, expect, it } from 'vitest';
 import type { API } from 'homebridge';
 import { BehaviorSubject, filter } from 'rxjs';
 import { SensorComponent } from 'esphome-ts';
+import { ok } from 'node:assert/strict';
 
 import { sensorHelper } from './sensor.js';
 import {
     assertCharacteristic,
     createFakeAccessory,
+    FakeHapStatusError,
     makeFakeCharacteristicClass,
     makeFakeServiceClass,
+    type FakeHapCharacteristic,
 } from '../testing/hapFakes.js';
 
 const CurrentTemperatureCharacteristic = makeFakeCharacteristicClass('current-temperature');
@@ -33,8 +36,20 @@ const CharacteristicClass = {
 
 const createFakeApi = () =>
     ({
-        hap: { Service: ServiceClass, Characteristic: CharacteristicClass },
+        hap: {
+            Service: ServiceClass,
+            Characteristic: CharacteristicClass,
+            HapStatusError: FakeHapStatusError,
+            HAPStatus: { SERVICE_COMMUNICATION_FAILURE: 'SERVICE_COMMUNICATION_FAILURE' },
+        },
     }) as unknown as API;
+
+/** Invokes the stored onGet handler, failing loudly when none is registered. */
+const invokeGet = async (characteristic: FakeHapCharacteristic): Promise<unknown> => {
+    const handler = characteristic.getHandler;
+    ok(handler, 'expected an onGet handler to be registered');
+    return await handler();
+};
 
 const createFakeSensorComponent = (
     overrides: Partial<Record<'unitOfMeasurement' | 'deviceClass' | 'icon' | 'name', string>> &
@@ -200,5 +215,42 @@ describe('sensorHelper', () => {
         // conversion must never push NaN. The characteristic's value stays untouched.
         state.next({});
         expect(assertCharacteristic(context.services[0], CurrentTemperatureCharacteristic).value).toBeUndefined();
+    });
+
+    it('serves a live GET and fails it until the first value is reported', async () => {
+        const { component, raw, state } = createFakeSensorComponent();
+        const { accessory, context } = createFakeAccessory();
+        sensorHelper(component, accessory, createFakeApi());
+        const characteristic = assertCharacteristic(context.services[0], CurrentAmbientLightLevelCharacteristic);
+
+        await expect(invokeGet(characteristic)).rejects.toThrow(FakeHapStatusError);
+
+        raw.value = 42;
+        state.next({});
+        expect(await invokeGet(characteristic)).toBe(42);
+    });
+
+    it('clamps out-of-range lux on GET as well as on push', async () => {
+        const { component, raw } = createFakeSensorComponent();
+        const { accessory, context } = createFakeAccessory();
+        sensorHelper(component, accessory, createFakeApi());
+        const characteristic = assertCharacteristic(context.services[0], CurrentAmbientLightLevelCharacteristic);
+
+        raw.value = 999_999;
+        expect(await invokeGet(characteristic)).toBe(100_000);
+
+        raw.value = -5;
+        expect(await invokeGet(characteristic)).toBe(0.0001);
+    });
+
+    it('serves a Fahrenheit GET in Celsius', async () => {
+        const { component, raw, state } = createFakeSensorComponent({ unitOfMeasurement: '°F' });
+        const { accessory, context } = createFakeAccessory();
+        sensorHelper(component, accessory, createFakeApi());
+        const characteristic = assertCharacteristic(context.services[0], CurrentTemperatureCharacteristic);
+
+        raw.value = 212;
+        state.next({});
+        expect(await invokeGet(characteristic)).toBe(100);
     });
 });

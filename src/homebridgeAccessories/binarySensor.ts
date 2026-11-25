@@ -73,13 +73,14 @@ export const binarySensorHelper = (
         return undefined;
     }
 
+    const status = () => component.status;
     const bindings: ComponentBinding[] = [
         {
             service: homekitStuff.service,
             name: component.name,
             characteristic: homekitStuff.characteristic,
-            read: () => component.status,
-            project: () => component.status,
+            read: status,
+            project: status,
         },
     ];
 
