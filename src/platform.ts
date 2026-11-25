@@ -1,14 +1,11 @@
 import type { API, DynamicPlatformPlugin, Logging, PlatformAccessory, PlatformConfig } from 'homebridge';
 import type { Observable } from 'rxjs';
-import { concat, defer, from, EMPTY, Subscription } from 'rxjs';
-import { catchError, filter, map, mergeMap, tap } from 'rxjs';
-import type { BaseComponent } from 'esphome-ts';
+import { concat, defer, from, Subscription } from 'rxjs';
+import { filter, map } from 'rxjs';
 import { EspDevice } from 'esphome-ts';
 
-import { componentHelpers } from './homebridgeAccessories/componentHelpers.js';
-import type { ComponentHelperOptions } from './homebridgeAccessories/componentBinding.js';
-import { PLATFORM_NAME, PLUGIN_NAME } from './constants.js';
-import { applyConnectionStatus } from './shared/connectionStatus.js';
+import { createAccessoryRegistry } from './accessoryRegistry.js';
+import type { AccessoryRegistry } from './accessoryRegistry.js';
 import { writeReadDataToLogFile } from './shared/index.js';
 import { startDeviceSession } from './deviceSession.js';
 import type { DebugDumpWriter } from './deviceSession.js';
@@ -45,16 +42,14 @@ const isResolvedDeviceConfig = (config: ResolvedDeviceConfig | undefined): confi
 const writeEspDeviceDebugDump: DebugDumpWriter = (host, device, onWriteError) =>
     device instanceof EspDevice ? writeReadDataToLogFile(host, device, onWriteError) : undefined;
 
+/**
+ * The platform owns the Device intake (configured entries plus Discovery) and one Device
+ * session per resolved Device. The Accessory registry owns everything HomeKit-side; the
+ * platform never touches an Accessory itself.
+ */
 export class EsphomePlatform implements DynamicPlatformPlugin {
-    protected readonly blacklistSet: Set<string>;
     protected readonly subscription: Subscription;
-    protected readonly accessories: PlatformAccessory[] = [];
-    /** Accessories previously set up from a device's components, keyed by its configured host.
-     * Cached accessories re-associate with their host via `accessory.context.host` when they
-     * are restored from Homebridge's disk cache in `configureAccessory`. */
-    protected readonly accessoriesByHost = new Map<string, PlatformAccessory[]>();
-    /** Last known alive state per host, to keep freshly added accessories in sync. */
-    protected readonly aliveStateByHost = new Map<string, boolean>();
+    protected readonly registry: AccessoryRegistry;
 
     constructor(
         protected readonly log: Logging,
@@ -62,6 +57,8 @@ export class EsphomePlatform implements DynamicPlatformPlugin {
         protected readonly api: API,
         /** Test seam: specs inject a fake session without mocking the module. */
         protected readonly startSession: typeof startDeviceSession = startDeviceSession,
+        /** Test seam: specs inject a fake registry and assert what the platform hands it. */
+        createRegistry: typeof createAccessoryRegistry = createAccessoryRegistry,
     ) {
         this.subscription = new Subscription();
         this.log('starting esphome');
@@ -76,9 +73,19 @@ export class EsphomePlatform implements DynamicPlatformPlugin {
         if (rawBlacklist !== undefined && !Array.isArray(rawBlacklist)) {
             this.log.warn('The "blacklist" configuration must be an array; ignoring it.');
         }
-        this.blacklistSet = new Set<string>(
+        const blacklist = new Set<string>(
             Array.isArray(rawBlacklist) ? rawBlacklist.filter((name): name is string => typeof name === 'string') : [],
         );
+
+        this.registry = createRegistry({
+            api: this.api,
+            log: this.log,
+            blacklist,
+            debug: this.config.debug === true,
+        });
+        // The registry's teardowns join the same aggregate as the session stops: on shutdown
+        // every binding subscription and every lifecycle stream is unsubscribed.
+        this.subscription.add(() => this.registry.stop());
 
         this.api.on('didFinishLaunching', () => {
             this.onHomebridgeDidFinishLaunching();
@@ -113,130 +120,18 @@ export class EsphomePlatform implements DynamicPlatformPlugin {
         }
 
         this.subscription.add(
-            devices
-                .pipe(
-                    mergeMap((deviceConfig) => {
-                        const session = this.startSession(deviceConfig, {
-                            log: this.log,
-                            writeDebugDump: this.config.debug ? writeEspDeviceDebugDump : undefined,
-                        });
-                        this.subscription.add(session.stop);
-                        this.subscription.add(
-                            session.alive$.subscribe((alive) => {
-                                this.aliveStateByHost.set(deviceConfig.host, alive);
-                                applyConnectionStatus(
-                                    this.accessoriesByHost.get(deviceConfig.host) ?? [],
-                                    alive,
-                                    this.api,
-                                );
-                            }),
-                        );
-                        return session.components$.pipe(
-                            tap((components) =>
-                                this.addAccessories(components, deviceConfig.host, {
-                                    invertFanDirection: deviceConfig.invertFanDirection,
-                                }),
-                            ),
-                            catchError((error: unknown) => {
-                                this.log.error(
-                                    `Error while discovering or setting up accessories for device ${deviceConfig.host}.`,
-                                    error,
-                                );
-                                return EMPTY;
-                            }),
-                        );
-                    }),
-                )
-                .subscribe(),
-        );
-    }
-
-    private addAccessories(
-        components: ReadonlyArray<BaseComponent>,
-        host: string,
-        options: ComponentHelperOptions = {},
-    ): void {
-        for (const component of components) {
-            if (this.blacklistSet.has(component.name)) {
-                this.logIfDebug(`not processing ${component.name} because it was blacklisted`);
-                continue;
-            }
-            const componentHelper = componentHelpers.get(component.type);
-            if (!componentHelper) {
-                this.log(`${component.name} is currently not supported. You might want to file an issue on Github.`);
-                continue;
-            }
-            const uuid = this.api.hap.uuid.generate(component.name);
-            let newAccessory = false;
-            let accessory: PlatformAccessory | undefined = this.accessories.find(
-                (accessory) => accessory.UUID === uuid,
-            );
-            if (!accessory) {
-                this.logIfDebug(`${component.name} must be a new accessory`);
-                accessory = new this.api.platformAccessory(component.name, uuid);
-                newAccessory = true;
-            }
-            const teardown = componentHelper(component, accessory, this.api, options);
-            if (!teardown) {
-                this.log(`${component.name} could not be mapped to HomeKit. Please file an issue on Github.`);
-                if (!newAccessory) {
-                    this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
-                }
-                continue;
-            }
-            this.subscription.add(teardown);
-
-            // Registration key so a cached accessory re-associates with this host on restore.
-            accessory.context.host = host;
-
-            this.log(`${component.name} discovered and setup.`);
-            if (accessory && newAccessory) {
-                this.accessories.push(accessory);
-                this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
-            }
-            const hostAccessories = this.accessoriesByHost.get(host) ?? [];
-            if (!hostAccessories.includes(accessory)) {
-                hostAccessories.push(accessory);
-                this.accessoriesByHost.set(host, hostAccessories);
-            }
-        }
-        this.logIfDebug(components);
-        // Keep freshly added accessories in sync with the last known connection state of this device.
-        applyConnectionStatus(
-            this.accessoriesByHost.get(host) ?? [],
-            this.aliveStateByHost.get(host) ?? true,
-            this.api,
+            devices.subscribe((deviceConfig) => {
+                const session = this.startSession(deviceConfig, {
+                    log: this.log,
+                    writeDebugDump: this.config.debug ? writeEspDeviceDebugDump : undefined,
+                });
+                this.subscription.add(session.stop);
+                this.registry.bind(deviceConfig, session);
+            }),
         );
     }
 
     public configureAccessory(accessory: PlatformAccessory): void {
-        if (!this.blacklistSet.has(accessory.displayName)) {
-            // Homebridge may hand the same cached accessory over twice; guard against duplicates.
-            if (!this.accessories.includes(accessory)) {
-                this.accessories.push(accessory);
-            }
-            // Re-associate the cached accessory with its host for connection-status sync.
-            const host = accessory.context.host; // persisted at registration; older disk caches may lack it
-            if (typeof host === 'string') {
-                const hostAccessories = this.accessoriesByHost.get(host) ?? [];
-                if (!hostAccessories.includes(accessory)) {
-                    hostAccessories.push(accessory);
-                    this.accessoriesByHost.set(host, hostAccessories);
-                }
-            }
-            this.logIfDebug(`cached accessory ${accessory.displayName} was added`);
-        } else {
-            this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
-            this.logIfDebug(`unregistered ${accessory.displayName} because it was blacklisted`);
-        }
-    }
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- kept from the original logging contract
-    private logIfDebug(msg?: any, ...parameters: unknown[]): void {
-        if (this.config.debug) {
-            this.log(msg, parameters);
-        } else {
-            this.log.debug(msg, parameters);
-        }
+        this.registry.restore(accessory);
     }
 }

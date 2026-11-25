@@ -212,6 +212,27 @@ export class FakeHapStatusError extends Error {
     }
 }
 
+/**
+ * PlatformAccessory double with the identity fields and context bag the Accessory registry
+ * uses (`displayName`, `UUID`, `context`, `services`). Services start empty; specs add the
+ * ones they assert on. Boundary cast: the real class carries the HAP accessory and events the
+ * registry never touches.
+ */
+export class FakePlatformAccessory {
+    public readonly services: FakeHapService[] = [];
+    public readonly context: Record<string, unknown> = {};
+
+    public constructor(
+        public readonly displayName: string,
+        public readonly UUID: string,
+    ) {}
+
+    public addService(service: FakeHapService): FakeHapService {
+        this.services.push(service);
+        return service;
+    }
+}
+
 /** Minimal PlatformAccessory double shared by specs: services array + addService, with the backing context exposed for assertions (consolidates five identical local factories). */
 export const createFakeAccessory = (...preExistingServices: FakeHapService[]) => {
     const context = { services: [...preExistingServices] };

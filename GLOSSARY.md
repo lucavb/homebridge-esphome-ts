@@ -21,6 +21,11 @@ _Avoid_: entity, channel
 The HomeKit platform accessory built from one component.
 _Avoid_: device (for the HomeKit side), gadget
 
+**Accessory registry**:
+The module that owns the HomeKit side of every Device: Accessory identity, cache restore,
+Homebridge registration, Connection status, and teardown.
+_Avoid_: accessory manager, accessory store
+
 **Component binding**:
 The mapping that attaches a component onto an accessory: which service, which characteristics, how state is read, applied, and pushed.
 _Avoid_: helper, mapper, wiring
