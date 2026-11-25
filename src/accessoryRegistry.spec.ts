@@ -218,6 +218,142 @@ describe('createAccessoryRegistry', () => {
         });
     });
 
+    describe('identity', () => {
+        it('keeps the first Device when a second Device claims a same-named Component', () => {
+            const helper = vi.fn(okHelper);
+            const { registry, registerPlatformAccessories, error } = createRegistry({
+                helpers: helperTable([['light', helper]]),
+            });
+            const first = createFakeDeviceSession();
+            const second = createFakeDeviceSession();
+            registry.bind(resolvedDevice({ host: 'esp-one.local' }), first.session);
+            registry.bind(resolvedDevice({ host: 'esp-two.local' }), second.session);
+
+            first.emitComponents([light()]);
+            second.emitComponents([light()]);
+
+            expect(registerPlatformAccessories).toHaveBeenCalledTimes(1);
+            expect(helper).toHaveBeenCalledTimes(1);
+            expect(error).toHaveBeenCalledWith(expect.stringContaining('Both esp-one.local and esp-two.local'));
+            expect(error).toHaveBeenCalledWith(expect.stringContaining('"office-light"'));
+            // The survivor is the first Device's binding; UUID and name alone cannot tell them apart.
+            expect(registeredAccessory(registerPlatformAccessories).context.host).toBe('esp-one.local');
+        });
+
+        it("still binds the second Device's other Components after refusing the collision", () => {
+            const helper = vi.fn(okHelper);
+            const { registry, registerPlatformAccessories } = createRegistry({
+                helpers: helperTable([['light', helper]]),
+            });
+            const first = createFakeDeviceSession();
+            const second = createFakeDeviceSession();
+            registry.bind(resolvedDevice({ host: 'esp-one.local' }), first.session);
+            registry.bind(resolvedDevice({ host: 'esp-two.local' }), second.session);
+
+            first.emitComponents([light()]);
+            second.emitComponents([light(), light('office-fan')]);
+
+            expect(registerPlatformAccessories).toHaveBeenCalledTimes(2);
+            expect(helper).toHaveBeenCalledTimes(2);
+        });
+
+        it('does not treat a repeated claim from the same Device host as a collision', () => {
+            const helper = vi.fn(okHelper);
+            const { registry, error } = createRegistry({ helpers: helperTable([['light', helper]]) });
+            const device = resolvedDevice();
+            const first = createFakeDeviceSession();
+            const second = createFakeDeviceSession();
+            registry.bind(device, first.session);
+            registry.bind(device, second.session);
+
+            first.emitComponents([light()]);
+            second.emitComponents([light()]);
+
+            expect(error).not.toHaveBeenCalled();
+            expect(helper).toHaveBeenCalledTimes(2);
+        });
+
+        it('releases the claim when the owning Accessory is unregistered', () => {
+            const teardown = vi.fn();
+            const helper = vi
+                .fn(okHelper)
+                .mockReturnValueOnce(teardown)
+                .mockReturnValueOnce(undefined)
+                .mockReturnValueOnce(() => {});
+            const { registry, registerPlatformAccessories, unregisterPlatformAccessories } = createRegistry({
+                helpers: helperTable([['light', helper]]),
+            });
+            const firstOwner = createFakeDeviceSession();
+            const claimant = createFakeDeviceSession();
+            registry.bind(resolvedDevice({ host: 'esp-one.local' }), firstOwner.session);
+            registry.bind(resolvedDevice({ host: 'esp-two.local' }), claimant.session);
+            firstOwner.emitComponents([light()]);
+            claimant.emitComponents([light()]);
+            expect(helper).toHaveBeenCalledTimes(1);
+
+            const rebind = createFakeDeviceSession();
+            registry.bind(resolvedDevice({ host: 'esp-one.local' }), rebind.session);
+            rebind.emitComponents([light()]);
+            expect(unregisteredAccessories(unregisterPlatformAccessories)).toHaveLength(1);
+
+            const retry = createFakeDeviceSession();
+            registry.bind(resolvedDevice({ host: 'esp-two.local' }), retry.session);
+            retry.emitComponents([light()]);
+
+            expect(registerPlatformAccessories).toHaveBeenCalledTimes(2);
+        });
+
+        it('lets only the claiming Device drive Connection status of a cached Accessory', () => {
+            const addSensor: ComponentHelper = (...args) => {
+                args[1].addService(new SensorService() as unknown as Service);
+                return () => {};
+            };
+            const { registry, registerPlatformAccessories, unregisterPlatformAccessories, error } = createRegistry({
+                helpers: helperTable([['light', addSensor]]),
+            });
+            const cached = new FakePlatformAccessory('office-light', 'uuid-office-light');
+            cached.context.host = 'esp-one.local';
+            const sensorService = new SensorService();
+            cached.addService(sensorService);
+            registry.restore(cached as unknown as PlatformAccessory);
+            // A second cached Accessory on an unrelated host proves the re-association drops
+            // only the moved Accessory, not every host's list.
+            const unrelated = new FakePlatformAccessory('hall-sensor', 'uuid-hall-sensor');
+            unrelated.context.host = 'esp-three.local';
+            const hallService = new SensorService();
+            unrelated.addService(hallService);
+            registry.restore(unrelated as unknown as PlatformAccessory);
+            const first = createFakeDeviceSession();
+            const second = createFakeDeviceSession();
+            const third = createFakeDeviceSession();
+            registry.bind(resolvedDevice({ host: 'esp-one.local' }), first.session);
+            registry.bind(resolvedDevice({ host: 'esp-two.local' }), second.session);
+            registry.bind(resolvedDevice({ host: 'esp-three.local' }), third.session);
+
+            // The second Device wins the claim: its Components arrive first.
+            second.emitComponents([light()]);
+            first.emitComponents([light()]);
+            // The winner is named first, so the losing Device appears second in the message.
+            expect(error).toHaveBeenCalledWith(expect.stringContaining('Both esp-two.local and esp-one.local'));
+
+            const status = sensorService.getCharacteristic(StatusActiveCharacteristic);
+            second.emitAlive(true);
+            expect(status.value).toBe(true);
+
+            // The unrelated host keeps its association and its Connection status.
+            third.emitAlive(true);
+            expect(hallService.getCharacteristic(StatusActiveCharacteristic).value).toBe(true);
+
+            // The losing Device's transport state must no longer reach the Accessory.
+            first.emitAlive(true);
+            first.emitAlive(false);
+            expect(status.value).toBe(true);
+            expect(cached.context.host).toBe('esp-two.local');
+            expect(registerPlatformAccessories).not.toHaveBeenCalled();
+            expect(unregisterPlatformAccessories).not.toHaveBeenCalled();
+        });
+    });
+
     describe('Connection status', () => {
         it('syncs a restored Accessory when its Device session binds and when alive changes', () => {
             const { registry } = createRegistry();
@@ -287,6 +423,29 @@ describe('createAccessoryRegistry', () => {
 
             expect(helper).toHaveBeenCalledTimes(1);
             expect(registerPlatformAccessories).not.toHaveBeenCalled();
+        });
+
+        it('ignores a distinct object handed over for an already-adopted UUID', () => {
+            const { registry } = createRegistry();
+            const adopted = new FakePlatformAccessory('office-light', 'uuid-office-light');
+            adopted.context.host = 'esp-one.local';
+            const adoptedService = new SensorService();
+            adopted.addService(adoptedService);
+            registry.restore(adopted as unknown as PlatformAccessory);
+
+            const impostor = new FakePlatformAccessory('office-light', 'uuid-office-light');
+            impostor.context.host = 'esp-one.local';
+            const impostorService = new SensorService();
+            impostor.addService(impostorService);
+            registry.restore(impostor as unknown as PlatformAccessory);
+
+            const session = createFakeDeviceSession();
+            registry.bind(resolvedDevice(), session.session);
+            session.emitAlive(true);
+
+            expect(adoptedService.getCharacteristic(StatusActiveCharacteristic).value).toBe(true);
+            // The impostor never joined the device lists, so it never received a status write.
+            expect(impostorService.testCharacteristic(StatusActiveCharacteristic)).toBe(false);
         });
     });
 

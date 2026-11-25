@@ -142,6 +142,15 @@ Settings → Remove Single Cached Accessory) or delete it from the accessory cac
 Homebridge. Editing the `devices` array alone does not prune the stale Switches; cached services are
 never removed automatically.
 
+### Duplicate component names
+
+HomeKit names an Accessory after its component name, so two Devices cannot both expose a
+component with the same name. The Device that binds first keeps the Accessory; the other
+component is skipped and the log names both hosts. Rename the component in one ESPHome
+configuration. Blacklisting the name would remove the Accessory from both Devices, so it is
+not a way to pick a winner. Renaming the component that currently owns the Accessory leaves
+the old one in Homebridge's cache; remove it with the cache steps above.
+
 ### Blacklisting
 
 If for some reason you want to exclude a specific component from this plugin just

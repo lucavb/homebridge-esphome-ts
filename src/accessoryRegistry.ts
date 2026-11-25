@@ -57,6 +57,13 @@ export const createAccessoryRegistry = (deps: AccessoryRegistryDeps): AccessoryR
     const accessoriesByDevice = new Map<string, PlatformAccessory[]>();
     /** Binding teardowns per Accessory, run when it is unregistered or the registry stops. */
     const teardownsByAccessory = new Map<PlatformAccessory, Array<() => void>>();
+    /**
+     * The first Device to bind a UUID owns it for the process lifetime. The claim is not
+     * persisted: `context.host` holds the resolved transport host, which Discovery replaces
+     * with the mDNS address, so a DHCP move would look like a new Device. A stable Device id
+     * is the prerequisite for persisting Accessory identity.
+     */
+    const claims = new Map<string, string>();
     /** Last Connection status per Device, used to catch up Accessories adopted after the emission. */
     const aliveByDevice = new Map<string, boolean>();
     const deviceSubscriptions: Subscription[] = [];
@@ -108,6 +115,7 @@ export const createAccessoryRegistry = (deps: AccessoryRegistryDeps): AccessoryR
     const unregister = (accessory: PlatformAccessory): void => {
         api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
         byUuid.delete(accessory.UUID);
+        claims.delete(accessory.UUID);
         disassociate(accessory);
         runTeardowns(accessory);
     };
@@ -130,6 +138,16 @@ export const createAccessoryRegistry = (deps: AccessoryRegistryDeps): AccessoryR
             }
 
             const uuid = api.hap.uuid.generate(component.name);
+            const claimedBy = claims.get(uuid);
+            if (claimedBy !== undefined && claimedBy !== device.host) {
+                log.error(
+                    `Both ${claimedBy} and ${device.host} expose a component named "${component.name}". ` +
+                        `HomeKit can host only one; keeping ${claimedBy}'s. Rename the component on one ` +
+                        `device. (Blacklisting "${component.name}" would remove it from both.)`,
+                );
+                continue;
+            }
+
             let accessory = byUuid.get(uuid);
             let newAccessory = false;
             if (accessory === undefined) {
@@ -159,6 +177,11 @@ export const createAccessoryRegistry = (deps: AccessoryRegistryDeps): AccessoryR
                 byUuid.set(uuid, accessory);
                 api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
             }
+            claims.set(uuid, device.host);
+            // One Accessory has one owner: a cached Accessory can still sit in its previous
+            // host's list, and the losing side of a claim keeps its alive$ watch. Drop the stale
+            // association so only the owning Device drives Connection status.
+            disassociate(accessory);
             associate(device.host, accessory);
         }
         logIfDebug('Device components', components);
@@ -181,8 +204,9 @@ export const createAccessoryRegistry = (deps: AccessoryRegistryDeps): AccessoryR
             if (adopted === undefined) {
                 byUuid.set(accessory.UUID, accessory);
             } else if (adopted !== accessory) {
-                // Homebridge dedupes its cache by UUID; a distinct object for an adopted UUID
-                // is not the Accessory the bridge owns, so it must not join the device lists.
+                // Homebridge hands over every cached entry; one that reuses an adopted UUID is
+                // not the object the bridge owns, so it must not join the device lists.
+                logIfDebug(`ignoring a second cached accessory for ${accessory.displayName}`);
                 return;
             }
 
@@ -234,6 +258,7 @@ export const createAccessoryRegistry = (deps: AccessoryRegistryDeps): AccessoryR
             byUuid.clear();
             accessoriesByDevice.clear();
             aliveByDevice.clear();
+            claims.clear();
         },
     };
 };
