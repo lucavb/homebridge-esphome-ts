@@ -25,7 +25,7 @@ reconnects.
 ## Requirements
 
 - Node.js >= 22.12
-- Homebridge ^1.6.0 or ^2.0.0
+- Homebridge ^1.8.0 or ^2.0.0
 
 ## Installation
 
