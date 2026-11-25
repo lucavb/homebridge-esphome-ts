@@ -1,8 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { API, Logging, PlatformAccessory } from 'homebridge';
-import { BehaviorSubject, distinctUntilChanged, shareReplay } from 'rxjs';
+import type { API } from 'homebridge';
 
-import { applyConnectionStatus, watchDeviceConnection } from './connectionStatus.js';
+import { applyConnectionStatus } from './connectionStatus.js';
 import {
     assertCharacteristic,
     makeFakeCharacteristicClass,
@@ -28,13 +27,6 @@ const createFakeApi = () =>
     ({
         hap: { Service: ServiceClass, Characteristic: CharacteristicClass },
     }) as unknown as API;
-
-const createFakeLogging = () => ({
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-    debug: vi.fn(),
-});
 
 describe('applyConnectionStatus', () => {
     it('adds StatusActive where absent and sets it on every service of every accessory', () => {
@@ -96,98 +88,5 @@ describe('applyConnectionStatus', () => {
 
     it('works with an empty accessory list', () => {
         expect(() => applyConnectionStatus([], true, createFakeApi())).not.toThrow();
-    });
-});
-
-describe('watchDeviceConnection', () => {
-    const setup = () => {
-        const log = createFakeLogging();
-        const api = createFakeApi();
-        // Faithful to esphome-ts v5: alive$ is distinctUntilChanged + shareReplay over a merge whose
-        // connected$ source is a BehaviorSubject(false) — every subscriber synchronously receives the
-        // buffered false at subscribe time (esphome-ts dist/index.js:2499, 3351-3359).
-        const connected = new BehaviorSubject<boolean>(false);
-        const alive$ = connected.pipe(distinctUntilChanged(), shareReplay({ bufferSize: 1, refCount: true }));
-        const sensorService = new SensorService();
-        const accessories: PlatformAccessory[] = [platformAccessoryWith(sensorService)];
-        const onStateChange = vi.fn();
-
-        const subscription = watchDeviceConnection('esp-device.local', { alive$ }, log as unknown as Logging, api, {
-            accessoriesOfDevice: () => accessories,
-            onStateChange,
-        });
-
-        return { subscription, connected, alive$, log, sensorService, accessories, onStateChange };
-    };
-
-    it('applies buffered initial offline state without logging a false alarm', () => {
-        // No manual push: the buffered `false` arrives on its own at subscribe time.
-        const { connected, log, sensorService, onStateChange } = setup();
-
-        expect(log.warn).not.toHaveBeenCalled();
-        expect(log.info).not.toHaveBeenCalled();
-        expect(onStateChange).toHaveBeenCalledWith(false);
-        expect(assertCharacteristic(sensorService, StatusActiveCharacteristic).value).toBe(false);
-
-        // distinctUntilChanged dedupes a repeated offline emission into the buffered one.
-        connected.next(false);
-        expect(onStateChange).toHaveBeenCalledTimes(1);
-    });
-
-    it('logs a warning and marks all services inactive on connection loss after being connected', () => {
-        const { connected, log, sensorService, onStateChange } = setup();
-
-        connected.next(true); // first connection: state recorded, no log lines
-        connected.next(false);
-
-        expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('esp-device.local'));
-        expect(log.info).not.toHaveBeenCalled();
-        expect(assertCharacteristic(sensorService, StatusActiveCharacteristic).value).toBe(false);
-        // buffered false (n=1), true (n=2), false (n=3)
-        expect(onStateChange).toHaveBeenNthCalledWith(3, false);
-    });
-
-    it('logs info and reactivates services on reconnect', () => {
-        const { connected, log, sensorService } = setup();
-
-        connected.next(true);
-        connected.next(false);
-        connected.next(true);
-
-        expect(log.info).toHaveBeenCalledWith(expect.stringContaining('re-established'));
-        expect(log.warn).toHaveBeenCalledTimes(1);
-        expect(assertCharacteristic(sensorService, StatusActiveCharacteristic).value).toBe(true);
-    });
-
-    it('deduplicates consecutive identical states', () => {
-        const { connected, log, onStateChange } = setup();
-
-        connected.next(true);
-        connected.next(false);
-        connected.next(false);
-        connected.next(false);
-
-        expect(log.warn).toHaveBeenCalledTimes(1);
-        // buffered false + true + false — the repeated falses are deduplicated.
-        expect(onStateChange).toHaveBeenCalledTimes(3);
-    });
-
-    it('re-evaluates the accessory lookup on every state change', () => {
-        const { connected, log, accessories } = setup();
-
-        // Device goes offline with no accessories attached...
-        accessories.splice(0, accessories.length);
-        connected.next(true);
-        connected.next(false);
-        expect(log.warn).toHaveBeenCalledTimes(1);
-
-        // ...and comes back online after a NEW accessory has been added late: the lookup is
-        // re-evaluated per state change, so the late service gets its StatusActive written.
-        const lateService = new SensorService();
-        accessories.push(platformAccessoryWith(lateService));
-        connected.next(true);
-
-        expect(lateService.testCharacteristic(StatusActiveCharacteristic)).toBe(true);
-        expect(lateService.getCharacteristic(StatusActiveCharacteristic).value).toBe(true);
     });
 });

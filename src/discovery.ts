@@ -7,7 +7,7 @@ import { map } from 'rxjs';
 
 const DEFAULT_PORT = 6053;
 
-interface DiscoveryResult {
+export interface DiscoveryResult {
     host: string;
     port?: number;
     address?: string;

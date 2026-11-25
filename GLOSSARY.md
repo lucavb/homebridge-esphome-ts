@@ -8,6 +8,11 @@ Homebridge plugin that bridges ESPHome devices into HomeKit over the ESPHome nat
 A single ESPHome node reachable at a host and port, owning a set of components.
 _Avoid_: ESP, node, board
 
+**Device session**:
+The lifecycle of one Device: construction, the reconnect cadence, the error policy, the debug dump,
+Connection status, and the Discovery wait.
+_Avoid_: connection, runtime
+
 **Component**:
 One addressable capability of a device: light, switch, binary sensor, sensor, cover, or fan.
 _Avoid_: entity, channel
