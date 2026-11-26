@@ -13,11 +13,21 @@ import type { CharacteristicValue, PlatformAccessory } from 'homebridge';
  *   when it is not — real hap logs there; this fake is silent but tracks such unlisted
  *   additions separately in `autoAddedUnlistedCharacteristics`.
  * - `addCharacteristic` is the silent instance-form add.
+ * - `setProps` merges the provided keys onto the characteristic's props (real hap
+ *   Characteristic.setProps); `addLinkedService` appends to `linkedServices` (real hap
+ *   Service.addLinkedService).
  * - Service classes pre-create their mandatory characteristics on construction, like real
  *   hap-nodejs services do.
  *
  * These fakes exist because the real hap classes cannot run in-process; reach for real
  * classes from installed dependencies everywhere else.
+ *
+ * Known divergences beyond those above: `setValue`/`updateValue` do not model real
+ * hap's `validateUserInput` (Characteristic.js:2097-2136) — no minStep quantization,
+ * min/max clamping, or validValues revert — because the fake characteristics carry
+ * no per-class prop defaults. Specs asserting pushed floats therefore see the raw
+ * plugin-computed value where real hap would serve a quantized one (e.g. a °F
+ * CurrentTemperature push of 22.2222 stores as-is here, real hap serves 22.2).
  */
 
 /** Handler shape for `onSet` registrations; rejections are swallowed on re-entry (like real hap). */
@@ -29,17 +39,26 @@ export interface FakeHapCharacteristic {
     UUID: string;
     /**
      * DELIBERATE harness sentinel, not real hap default initialization: a characteristic
-     * nobody wrote reads as `undefined`. Real hap's `getValue()` instead serves
-     * `getDefaultValue()` (On → `false`, numerics → minValue/0) for never-written
-     * characteristics.
+     * nobody wrote reads as `undefined`. Real concrete hap classes initialize `this.value`
+     * to `getDefaultValue()` in their constructors (e.g. On → `false`, numerics →
+     * `validValues[0]`/`minValue`), and hap's read paths re-derive that default for
+     * never-written characteristics.
      */
     value: CharacteristicValue | undefined;
+    /**
+     * Props merged through `setProps` (real hap Characteristic.props). Starts empty —
+     * the fake does not model the per-class HAP defaults; specs assert only the keys
+     * a binding row explicitly set.
+     */
+    props: Record<string, unknown>;
     setHandler: FakeSetHandler | undefined;
     getHandler: FakeGetHandler | undefined;
     /** Models real hap: registers the handler and returns the characteristic for chaining. */
     onSet: (handler: FakeSetHandler) => FakeHapCharacteristic;
     /** Models real hap: registers the handler and returns the characteristic for chaining. */
     onGet: (handler: FakeGetHandler) => FakeHapCharacteristic;
+    /** Models real hap Characteristic.setProps: merges the provided keys into `props`. */
+    setProps: (props: Record<string, unknown>) => FakeHapCharacteristic;
     setValue: (value: CharacteristicValue) => void;
     updateValue: (value: CharacteristicValue) => void;
 }
@@ -62,6 +81,10 @@ export interface FakeHapService {
     optionalCharacteristics: FakeHapCharacteristicConstructor[];
     autoAddedCharacteristics: FakeHapCharacteristic[];
     autoAddedUnlistedCharacteristics: FakeHapCharacteristic[];
+    /** Services linked through addLinkedService, like real hap Service.linkedServices. */
+    linkedServices: FakeHapService[];
+    /** Models real hap Service.addLinkedService: appends when not already linked. */
+    addLinkedService: (service: FakeHapService) => void;
     testCharacteristic: (constructor: FakeHapCharacteristicConstructor) => boolean;
     getCharacteristic: (constructor: FakeHapCharacteristicConstructor) => FakeHapCharacteristic;
     addCharacteristic: (characteristic: FakeHapCharacteristic) => FakeHapCharacteristic;
@@ -82,6 +105,7 @@ export const makeFakeCharacteristicClass = (uuid: string): FakeHapCharacteristic
         public static readonly UUID = uuid;
         public readonly UUID = uuid;
         public value: CharacteristicValue | undefined;
+        public props: Record<string, unknown> = {};
         public setHandler: FakeSetHandler | undefined;
         public getHandler: FakeGetHandler | undefined;
 
@@ -96,6 +120,17 @@ export const makeFakeCharacteristicClass = (uuid: string): FakeHapCharacteristic
 
         public onGet(handler: FakeGetHandler): FakeHapCharacteristic {
             this.getHandler = handler;
+            return this;
+        }
+
+        /**
+         * Models real hap Characteristic.setProps (Characteristic.js:1368+): the provided
+         * keys are assigned onto the stored props. Real hap validates some keys
+         * (format/perms assertions, minValue<maxValue warnings); the fake keeps the
+         * merge only, which is the boundary the plugin exercises.
+         */
+        public setProps(props: Record<string, unknown>): FakeHapCharacteristic {
+            this.props = { ...this.props, ...props };
             return this;
         }
 
@@ -150,12 +185,20 @@ export const makeFakeServiceClass = (
         public optionalCharacteristics: FakeHapCharacteristicConstructor[] = [];
         public autoAddedCharacteristics: FakeHapCharacteristic[] = [];
         public autoAddedUnlistedCharacteristics: FakeHapCharacteristic[] = [];
+        public linkedServices: FakeHapService[] = [];
 
         public constructor(name = '', subtype = '') {
             this.name = name;
             this.subtype = subtype;
             for (const constructor of mandatoryCharacteristics) {
                 this.characteristics.set(constructor.UUID, new constructor());
+            }
+        }
+
+        /** Models real hap Service.addLinkedService (Service.js:444): appends when not already linked. */
+        public addLinkedService(service: FakeHapService): void {
+            if (!this.linkedServices.includes(service)) {
+                this.linkedServices.push(service);
             }
         }
 

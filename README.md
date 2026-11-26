@@ -13,6 +13,9 @@ Supported components include:
 - LightSensors (illuminance)
 - Covers
 - Fans (speed, direction, oscillation and preset modes)
+- Climate devices (thermostats and air conditioners: modes, heating/cooling state,
+  current and target temperatures, two-point ranges, humidity, and fan modes or
+  swing on a linked fan service)
 
 This project is currently still in beta, but I thought that many eyes see more than just
 my two :)

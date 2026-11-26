@@ -7,6 +7,7 @@ describe('componentHelpers', () => {
     it('registers a helper for every supported component type', () => {
         expect([...componentHelpers.keys()].sort()).toEqual([
             'binarySensor',
+            'climate',
             'cover',
             'fan',
             'light',

@@ -76,7 +76,7 @@ const createFakeCoverComponent = (options: FakeCoverOptions = {}) => {
     /**
      * Faithful to esphome-ts v5 state$: built from a BehaviorSubject(undefined) filtered on
      * undefined, so late subscribers (each binding row) get the current state replayed at
-     * subscribe time (esphome-ts dist/index.js:2837, 2819-2826). v5 shallow-compare dedup drops
+     * subscribe time (esphome-ts dist/index.js:6504-6530). v5 shallow-compare dedup drops
      * identical re-sent states upstream of the contract this fake models.
      */
     const state = new BehaviorSubject<unknown>(undefined);

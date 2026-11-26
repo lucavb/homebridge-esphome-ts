@@ -1,3 +1,4 @@
+import { climateHelper } from './climate.js';
 import { lightHelper } from './light.js';
 import { binarySensorHelper } from './binarySensor.js';
 import { coverHelper } from './cover.js';
@@ -20,6 +21,7 @@ export const componentHelpers = new Map<ComponentType, ComponentHelper>([
     ['binarySensor', binarySensorHelper],
     ['cover', coverHelper],
     ['fan', fanHelper],
+    ['climate', climateHelper],
     ['sensor', sensorHelper],
     ['switch', switchHelper],
 ]);

@@ -1,5 +1,13 @@
 import { Subscription, tap } from 'rxjs';
-import type { API, Characteristic, CharacteristicValue, PlatformAccessory, Service, WithUUID } from 'homebridge';
+import type {
+    API,
+    Characteristic,
+    CharacteristicProps,
+    CharacteristicValue,
+    PlatformAccessory,
+    Service,
+    WithUUID,
+} from 'homebridge';
 import type { BaseComponent } from 'esphome-ts';
 
 type ServiceConstructor = (new (displayName?: string, subtype?: string) => Service) & { readonly UUID: string };
@@ -26,6 +34,13 @@ export interface ComponentBinding {
     /** Optional service subtype (light effect switches, fan presets). */
     readonly subtype?: string;
     readonly characteristic: WithUUID<new (...args: never[]) => Characteristic>;
+    /**
+     * Applied through `setProps` before any handler wiring, so client-facing
+     * bounds (`minValue`/`maxValue`/`minStep`) and `validValues` (the mode
+     * characteristics) constrain what controllers can write. Omit to keep the
+     * HAP class defaults.
+     */
+    readonly props?: Partial<CharacteristicProps>;
     /** Wired as `onGet`; omit to leave the characteristic without a getter. */
     readonly read?: () => CharacteristicValue;
     /** Wired as `onSet`; omit to leave the characteristic without a setter. */
@@ -43,7 +58,8 @@ export interface ComponentBinding {
 
 /**
  * Binds the given component's rows onto the accessory: find-or-add per service row
- * (matched on service UUID and optional subtype), wire `onSet`/`onGet` with the uniform
+ * (matched on service UUID and optional subtype), apply each row's props through
+ * `setProps` before any handler wiring, wire `onSet`/`onGet` with the uniform
  * HapStatusError wrap, and push projected state per row through one owned `state$`
  * subscription per row (aggregated into the returned teardown).
  *
@@ -77,6 +93,9 @@ export const bindComponent = (
             }
 
             const characteristic = service.getCharacteristic(row.characteristic);
+            if (row.props) {
+                characteristic.setProps(row.props);
+            }
             return { row, characteristic };
         },
     );

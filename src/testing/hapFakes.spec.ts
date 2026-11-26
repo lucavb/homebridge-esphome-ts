@@ -191,7 +191,9 @@ describe('makeFakeServiceClass', () => {
             expect(added).toBe(nameCharacteristic);
             expect(service.testCharacteristic(NAME_CHARACTERISTIC)).toBe(true);
             expect(service.autoAddedCharacteristics).toHaveLength(0);
-            // no-arg construction default-initializes the value, like real concrete classes
+            // no-arg construction keeps the harness sentinel: the value reads
+            // undefined until written (deliberate divergence — real concrete
+            // classes initialize to their getDefaultValue).
             expect(added.value).toBeUndefined();
         });
     });
@@ -212,6 +214,36 @@ describe('FakeHapStatusError', () => {
         expect(error).toBeInstanceOf(Error);
         expect(error.hapStatus).toBe('SERVICE_COMMUNICATION_FAILURE');
         expect(error.message).toContain('SERVICE_COMMUNICATION_FAILURE');
+    });
+});
+
+describe('setProps', () => {
+    it('merges the provided keys onto the stored props, like real hap Characteristic.setProps', () => {
+        const characteristic = new LIGHT_CHARACTERISTIC();
+        expect(characteristic.props).toEqual({});
+
+        expect(characteristic.setProps({ minValue: 7, maxValue: 30 })).toBe(characteristic);
+        expect(characteristic.props).toEqual({ minValue: 7, maxValue: 30 });
+
+        // A second application merges per key rather than replacing.
+        characteristic.setProps({ maxValue: 27, minStep: 0.5 });
+        expect(characteristic.props).toEqual({ minValue: 7, maxValue: 27, minStep: 0.5 });
+    });
+});
+
+describe('addLinkedService', () => {
+    it('appends linked services and dedupes like real hap Service.addLinkedService', () => {
+        const primary = new SwitchService('primary');
+        const fan = new SwitchService('fan');
+        const other = new SwitchService('other');
+
+        expect(primary.linkedServices).toEqual([]);
+        primary.addLinkedService(fan);
+        primary.addLinkedService(other);
+        // The same service does not link twice (Service.js:443-450).
+        primary.addLinkedService(fan);
+
+        expect(primary.linkedServices).toEqual([fan, other]);
     });
 });
 

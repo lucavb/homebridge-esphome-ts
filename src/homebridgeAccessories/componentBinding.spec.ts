@@ -44,10 +44,12 @@ const createFakeComponent = (): {
     state: BehaviorSubject<unknown>;
     state$: Observable<unknown>;
 } => {
-    // Faithful to esphome-ts v5 state$: BehaviorSubject(undefined) + filter — current state
-    // replays to late subscribers (esphome-ts dist/index.js:2837, 2819-2826). Tests that intend
-    // "a push happens only after bind" push after bindComponent below (before-bind pushes
-    // would be replayed on bind instead of dropped).
+    // esphome-ts v5 state$ shape as bindComponent exercises it: BehaviorSubject(undefined) + filter
+    // (replay to late subscribers, esphome-ts dist/index.js:6504-6530). The real
+    // BaseComponent additionally shallow-dedups identical re-sent states (dist
+    // distinctUntilChanged); the one test relying on a repeated identical push notes it
+    // inline. Tests that intend "a push happens only after bind" push after bindComponent
+    // below (before-bind pushes would be replayed on bind instead of dropped).
     const state = new BehaviorSubject<unknown>(undefined);
     const state$ = state.pipe(filter((value) => value !== undefined));
     const raw: FakeComponent = { state$ };
@@ -284,6 +286,34 @@ describe('bindComponent', () => {
         });
     });
 
+    it('applies row props through setProps before wiring, merging across repeated binds', () => {
+        const { component } = createFakeComponent();
+        const { accessory, context } = createFakeAccessory();
+
+        bindComponent(component, accessory, createFakeApi(), [
+            {
+                service: SensorService,
+                name: 'TestSensor',
+                characteristic: CURRENT_VALUE_CHARACTERISTIC,
+                props: { minValue: 7.5, maxValue: 30, minStep: 0.5 },
+                read: () => 21,
+            } as unknown as ComponentBinding,
+        ]);
+
+        const characteristic = assertCharacteristic(context.services[0], CURRENT_VALUE_CHARACTERISTIC);
+        expect(characteristic.props).toEqual({ minValue: 7.5, maxValue: 30, minStep: 0.5 });
+        // A second bind onto the same characteristic merges its props, like real hap setProps.
+        bindComponent(component, accessory, createFakeApi(), [
+            {
+                service: SensorService,
+                name: 'TestSensor',
+                characteristic: CURRENT_VALUE_CHARACTERISTIC,
+                props: { maxValue: 27 },
+            } as unknown as ComponentBinding,
+        ]);
+        expect(characteristic.props).toEqual({ minValue: 7.5, maxValue: 27, minStep: 0.5 });
+    });
+
     it('a radioGroup apply pushes updateValue(false) to sibling rows, not to the applying row', async () => {
         const { component } = createFakeComponent();
         const { accessory, context } = createFakeAccessory();
@@ -373,9 +403,11 @@ describe('bindComponent', () => {
     });
 
     it('a device push never re-enters the row apply, even when the value is out of sync', async () => {
-        // Faithful to esphome-ts v5 state$: BehaviorSubject(undefined) + filter — current
-        // state replays to late subscribers (esphome-ts dist/index.js:2837, 2819-2826). Both
-        // pushes below happen after bindComponent subscribed, so replay never applies.
+        // esphome-ts v5 state$ shape as bindComponent exercises it: BehaviorSubject(undefined)
+        // + filter, replaying the current state to late subscribers. The real BaseComponent
+        // additionally shallow-dedups identical re-sent states (dist distinctUntilChanged),
+        // so the second byte-identical push below would never reach a real binding — the
+        // fake re-delivers it deliberately to prove even a stale re-push stays silent.
         const state = new BehaviorSubject<unknown>(undefined);
         const state$ = state.pipe(filter((value) => value !== undefined));
         const turnOn = vi.fn();
@@ -449,9 +481,9 @@ describe('bindComponent', () => {
     });
 
     it('a light-shaped state echo with multiple effects never re-sends an effect command', async () => {
-        // Faithful to esphome-ts v5 state$: BehaviorSubject(undefined) + filter — current
-        // state replays to late subscribers (esphome-ts dist/index.js:2837, 2819-2826). The
-        // push below happens after bindComponent subscribed, so replay never applies.
+        // esphome-ts v5 state$ shape as bindComponent exercises it: BehaviorSubject(undefined)
+        // + filter, replaying the current state to late subscribers (the push below happens
+        // after bindComponent subscribed, so replay never applies).
         const state = new BehaviorSubject<unknown>(undefined);
         const state$ = state.pipe(filter((value) => value !== undefined));
         const turnOn = vi.fn();

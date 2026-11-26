@@ -14,7 +14,7 @@ Connection status, and the Discovery wait.
 _Avoid_: connection, runtime
 
 **Component**:
-One addressable capability of a device: light, switch, binary sensor, sensor, cover, or fan.
+One addressable capability of a device: light, switch, binary sensor, sensor, cover, climate, or fan.
 _Avoid_: entity, channel
 
 **Accessory**:
